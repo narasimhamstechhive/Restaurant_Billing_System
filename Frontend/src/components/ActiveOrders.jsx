@@ -23,11 +23,51 @@ const ActiveOrders = ({ onSelectOrder }) => {
     }
   };
 
-  if (loading) return <div className="p-8 text-center text-text-muted">Loading active orders...</div>;
+  if (loading) return (
+    <div className="h-full flex flex-col bg-background">
+      <div className="p-6 border-b border-border bg-surface">
+        <div className="flex items-center gap-3">
+          <div className="w-8 h-8 bg-primary/20 rounded-lg animate-pulse"></div>
+          <div className="h-6 bg-text-muted/20 rounded w-32 animate-pulse"></div>
+          <div className="px-3 py-1 bg-primary/20 rounded-full animate-pulse">
+            <div className="w-8 h-4 bg-primary/40 rounded"></div>
+          </div>
+        </div>
+      </div>
+      <div className="flex-1 overflow-y-auto p-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+          {[...Array(8)].map((_, i) => (
+            <div key={i} className="bg-surface rounded-2xl border border-border/50 shadow-sm animate-pulse">
+              <div className="p-5">
+                <div className="flex justify-between items-start mb-4">
+                  <div>
+                    <div className="w-16 h-5 bg-text-muted/20 rounded mb-1"></div>
+                    <div className="w-20 h-3 bg-text-muted/20 rounded"></div>
+                  </div>
+                  <div className="w-12 h-5 bg-text-muted/20 rounded"></div>
+                </div>
+                <div className="space-y-2 mb-6">
+                  <div className="flex justify-between">
+                    <div className="w-8 h-3 bg-text-muted/20 rounded"></div>
+                    <div className="w-6 h-3 bg-text-muted/20 rounded"></div>
+                  </div>
+                  <div className="flex justify-between">
+                    <div className="w-12 h-3 bg-text-muted/20 rounded"></div>
+                    <div className="w-10 h-3 bg-text-muted/20 rounded"></div>
+                  </div>
+                </div>
+                <div className="w-full h-10 bg-primary/20 rounded-xl"></div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
 
   return (
     <div className="h-full flex flex-col bg-background">
-      <div className="p-6 border-b border-border bg-surface">
+      <div className="p-6 border-b border-border bg-gradient-to-r from-primary/5 to-accent/5">
         <h2 className="text-2xl font-bold text-text-main flex items-center gap-3">
           <UtensilsCrossed className="text-primary" />
           Active Orders

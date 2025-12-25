@@ -25,12 +25,26 @@ export const getOpenOrders = async () => {
   return response.data;
 };
 
-export const getBills = async () => {
-  const response = await api.get('/bills');
+export const getBills = async (page = 1, limit = 50, search = '') => {
+  const params = new URLSearchParams();
+  params.append('page', page);
+  params.append('limit', limit);
+  if (search) params.append('search', search);
+  const response = await api.get(`/bills?${params.toString()}`);
+  return response.data;
+};
+
+export const getBillById = async (id) => {
+  const response = await api.get(`/bills/${id}`);
   return response.data;
 };
 
 export const deleteBill = async (id) => {
   const response = await api.delete(`/bills/${id}`);
+  return response.data;
+};
+
+export const getDailyStats = async () => {
+  const response = await api.get('/bills/stats');
   return response.data;
 };

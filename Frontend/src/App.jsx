@@ -4,16 +4,19 @@ import BillHistory from './components/BillHistory';
 import LoginPage from './components/LoginPage';
 import MenuManagement from './components/MenuManagement';
 import ActiveOrders from './components/ActiveOrders';
-import { LogOut, LayoutDashboard, History, User, UtensilsCrossed, ClipboardList } from 'lucide-react';
+import Analytics from './components/Analytics';
+import Dashboard from './components/Dashboard';
+import { LogOut, LayoutDashboard, History, User, UtensilsCrossed, ClipboardList, BarChart3, Home } from 'lucide-react';
 import { getOpenOrders } from './api/billing';
 import './App.css';
 
 function App() {
-  const [view, setView] = useState('orders'); // Default to orders view
+  const [view, setView] = useState('dashboard'); // Default to dashboard view
   const [selectedTable, setSelectedTable] = useState(null);
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [activeOrdersCount, setActiveOrdersCount] = useState(0);
+  const [sectionLoading, setSectionLoading] = useState(false);
 
   useEffect(() => {
     const savedUser = localStorage.getItem('user');
@@ -50,6 +53,15 @@ function App() {
     localStorage.removeItem('user');
   };
 
+  const handleViewChange = (newView) => {
+    setSectionLoading(true);
+    setView(newView);
+    // Simulate loading time (1-2 seconds) for better UX
+    setTimeout(() => {
+      setSectionLoading(false);
+    }, 800);
+  };
+
   if (loading) return <div className="flex items-center justify-center h-screen bg-background text-text-muted">Loading...</div>;
 
   if (!user) {
@@ -58,9 +70,11 @@ function App() {
 
   const getTitle = () => {
     switch(view) {
+      case 'dashboard': return 'Dashboard';
       case 'billing': return 'New Order';
       case 'history': return 'Transaction History';
       case 'menu': return 'Menu Management';
+      case 'analytics': return 'Analytics';
       default: return 'RestoPOS';
     }
   };
@@ -80,7 +94,14 @@ function App() {
 
         <nav className="flex-1 px-4 py-6 space-y-2">
           <button 
-            onClick={() => setView('orders')}
+            onClick={() => handleViewChange('dashboard')}
+            className={`w-full flex items-center gap-3 px-4 py-3.5 rounded-2xl transition-all font-medium ${view === 'dashboard' ? 'bg-primary text-white shadow-lg shadow-primary/25 translate-x-2' : 'text-text-muted hover:bg-surface-hover hover:text-text-main hover:translate-x-1'}`}
+          >
+            <Home size={20} />
+            <span>Dashboard</span>
+          </button>
+          <button 
+            onClick={() => handleViewChange('orders')}
             className={`w-full flex items-center gap-3 px-4 py-3.5 rounded-2xl transition-all font-medium relative ${view === 'orders' ? 'bg-primary text-white shadow-lg shadow-primary/25 translate-x-2' : 'text-text-muted hover:bg-surface-hover hover:text-text-main hover:translate-x-1'}`}
           >
             <ClipboardList size={20} />
@@ -92,23 +113,30 @@ function App() {
             )}
           </button>
           <button 
-            onClick={() => setView('billing')}
+            onClick={() => handleViewChange('billing')}
             className={`w-full flex items-center gap-3 px-4 py-3.5 rounded-2xl transition-all font-medium ${view === 'billing' ? 'bg-primary text-white shadow-lg shadow-primary/25 translate-x-2' : 'text-text-muted hover:bg-surface-hover hover:text-text-main hover:translate-x-1'}`}
           >
             <LayoutDashboard size={20} />
             <span>New Order</span>
           </button>
           <button 
-            onClick={() => setView('history')}
+            onClick={() => handleViewChange('history')}
             className={`w-full flex items-center gap-3 px-4 py-3.5 rounded-2xl transition-all font-medium ${view === 'history' ? 'bg-primary text-white shadow-lg shadow-primary/25 translate-x-2' : 'text-text-muted hover:bg-surface-hover hover:text-text-main hover:translate-x-1'}`}
           >
             <History size={20} />
             <span>Bill History</span>
           </button>
+          <button 
+            onClick={() => handleViewChange('analytics')}
+            className={`w-full flex items-center gap-3 px-4 py-3.5 rounded-2xl transition-all font-medium ${view === 'analytics' ? 'bg-primary text-white shadow-lg shadow-primary/25 translate-x-2' : 'text-text-muted hover:bg-surface-hover hover:text-text-main hover:translate-x-1'}`}
+          >
+            <BarChart3 size={20} />
+            <span>Analytics</span>
+          </button>
           
           {user.role === 'Admin' && (
             <button 
-              onClick={() => setView('menu')}
+              onClick={() => handleViewChange('menu')}
               className={`w-full flex items-center gap-3 px-4 py-3.5 rounded-2xl transition-all font-medium ${view === 'menu' ? 'bg-primary text-white shadow-lg shadow-primary/25 translate-x-2' : 'text-text-muted hover:bg-surface-hover hover:text-text-main hover:translate-x-1'}`}
             >
               <UtensilsCrossed size={20} />
@@ -155,18 +183,31 @@ function App() {
         )}
 
         <main className="flex-1 overflow-hidden p-6">
-          {view === 'orders' && (
-            <ActiveOrders 
-              onSelectOrder={(tableNo) => {
-                setSelectedTable(tableNo);
-                setView('billing');
-              }} 
-              onOrderUpdate={fetchActiveOrdersCount}
-            />
+          {sectionLoading ? (
+            <div className="flex items-center justify-center h-full">
+              <div className="flex flex-col items-center gap-4">
+                <div className="w-12 h-12 border-4 border-primary/20 border-t-primary rounded-full animate-spin"></div>
+                <p className="text-text-muted font-medium">Loading...</p>
+              </div>
+            </div>
+          ) : (
+            <>
+              {view === 'dashboard' && <Dashboard />}
+              {view === 'orders' && (
+                <ActiveOrders 
+                  onSelectOrder={(tableNo) => {
+                    setSelectedTable(tableNo);
+                    handleViewChange('billing');
+                  }} 
+                  onOrderUpdate={fetchActiveOrdersCount}
+                />
+              )}
+              {view === 'billing' && <BillingPage initialTable={selectedTable} onOrderUpdate={fetchActiveOrdersCount} />}
+              {view === 'history' && <BillHistory />}
+              {view === 'analytics' && <Analytics />}
+              {view === 'menu' && <MenuManagement />}
+            </>
           )}
-          {view === 'billing' && <BillingPage initialTable={selectedTable} onOrderUpdate={fetchActiveOrdersCount} />}
-          {view === 'history' && <BillHistory />}
-          {view === 'menu' && <MenuManagement />}
         </main>
       </div>
     </div>

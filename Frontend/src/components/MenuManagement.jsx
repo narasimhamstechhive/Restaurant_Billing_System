@@ -1,27 +1,47 @@
 import React, { useState, useEffect } from 'react';
 import { getMenuItems, addMenuItem, updateMenuItem, deleteMenuItem } from '../api/menu';
-import { Plus, Edit2, Trash2, X, Search } from 'lucide-react';
+import { getAllCategories, createCategory, updateCategory, deleteCategory } from '../api/category';
+import { Plus, Edit2, Trash2, X, Search, FolderPlus, Folder, FolderOpen, ChevronLeft, ChevronRight } from 'lucide-react';
 import ConfirmationModal from './ConfirmationModal';
+import Toast from './Toast';
 
 const MenuManagement = () => {
+  const [activeTab, setActiveTab] = useState('items');
   const [items, setItems] = useState([]);
+  const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
   const [currentItem, setCurrentItem] = useState(null);
+  const [currentCategory, setCurrentCategory] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
-  const [deleteModal, setDeleteModal] = useState({ isOpen: false, itemId: null });
-  
+  const [deleteModal, setDeleteModal] = useState({ isOpen: false, itemId: null, categoryId: null });
+  const [toast, setToast] = useState(null);
+  const [validationErrors, setValidationErrors] = useState({});
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 20;
+
   // Form State
   const [formData, setFormData] = useState({
     name: '',
     category: '',
     price: '',
     type: 'veg',
-    description: ''
+    description: '',
+    taxRate: 0,
+    isAvailable: true
+  });
+
+  const [categoryFormData, setCategoryFormData] = useState({
+    name: '',
+    description: '',
+    sortOrder: 0,
+    isActive: true
   });
 
   useEffect(() => {
     fetchItems();
+    fetchCategories();
   }, []);
 
   const fetchItems = async () => {
@@ -35,15 +55,26 @@ const MenuManagement = () => {
     }
   };
 
+  const fetchCategories = async () => {
+    try {
+      const data = await getAllCategories();
+      setCategories(data);
+    } catch (error) {
+      console.error('Error fetching categories:', error);
+    }
+  };
+
   const handleOpenModal = (item = null) => {
     if (item) {
       setCurrentItem(item);
       setFormData({
         name: item.name,
-        category: item.category,
+        category: item.category?.name || item.category || '',
         price: item.price,
         type: item.type || 'veg',
-        description: item.description || ''
+        description: item.description || '',
+        taxRate: item.taxRate || 0,
+        isAvailable: item.isAvailable !== false
       });
     } else {
       setCurrentItem(null);
@@ -52,25 +83,93 @@ const MenuManagement = () => {
         category: '',
         price: '',
         type: 'veg',
-        description: ''
+        description: '',
+        taxRate: 0,
+        isAvailable: true
       });
     }
     setIsModalOpen(true);
   };
 
+  const handleOpenCategoryModal = (category = null) => {
+    if (category) {
+      setCurrentCategory(category);
+      setCategoryFormData({
+        name: category.name,
+        description: category.description || '',
+        sortOrder: category.sortOrder || 0,
+        isActive: category.isActive !== false
+      });
+    } else {
+      setCurrentCategory(null);
+      setCategoryFormData({
+        name: '',
+        description: '',
+        sortOrder: 0,
+        isActive: true
+      });
+    }
+    setIsCategoryModalOpen(true);
+  };
+
+  const validateItemForm = () => {
+    const errors = {};
+    
+    if (!formData.name || formData.name.trim() === '') {
+      errors.name = 'Item name is required';
+    }
+    
+    if (!formData.category || formData.category === '') {
+      errors.category = 'Category is required';
+    }
+    
+    const price = parseFloat(formData.price);
+    if (!formData.price || formData.price === '') {
+      errors.price = 'Price is required';
+    } else if (isNaN(price) || price <= 0) {
+      errors.price = 'Price must be a positive number';
+    }
+    
+    const taxRate = parseFloat(formData.taxRate);
+    if (formData.taxRate !== '' && (isNaN(taxRate) || taxRate < 0)) {
+      errors.taxRate = 'Tax rate must be a non-negative number';
+    }
+    
+    setValidationErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
+    
+    if (!validateItemForm()) {
+      setToast({ message: 'Please fix validation errors', type: 'error' });
+      return;
+    }
+    
     try {
+      const price = parseFloat(formData.price);
+      const taxRate = parseFloat(formData.taxRate) || 0;
+      
+      const itemData = {
+        ...formData,
+        price,
+        taxRate
+      };
+      
       if (currentItem) {
-        await updateMenuItem(currentItem._id, formData);
+        await updateMenuItem(currentItem._id, itemData);
+        setToast({ message: 'Item updated successfully', type: 'success' });
       } else {
-        await addMenuItem(formData);
+        await addMenuItem(itemData);
+        setToast({ message: 'Item created successfully', type: 'success' });
       }
       fetchItems();
       setIsModalOpen(false);
+      setValidationErrors({});
     } catch (error) {
       console.error('Error saving item:', error);
-      alert('Failed to save item');
+      setToast({ message: error.response?.data?.message || 'Failed to save item', type: 'error' });
     }
   };
 
@@ -79,47 +178,141 @@ const MenuManagement = () => {
   };
 
   const confirmDelete = async () => {
-    if (!deleteModal.itemId) return;
-
-    try {
-      await deleteMenuItem(deleteModal.itemId);
-      fetchItems();
-      setDeleteModal({ isOpen: false, itemId: null });
-    } catch (error) {
-      console.error('Error deleting item:', error);
-      alert('Failed to delete item');
+    if (deleteModal.itemId) {
+      try {
+        await deleteMenuItem(deleteModal.itemId);
+        fetchItems();
+        setDeleteModal({ isOpen: false, itemId: null, categoryId: null });
+        setToast({ message: 'Item deleted successfully', type: 'success' });
+      } catch (error) {
+        console.error('Error deleting item:', error);
+        setToast({ message: error.response?.data?.message || 'Failed to delete item', type: 'error' });
+      }
+    } else if (deleteModal.categoryId) {
+      try {
+        await deleteCategory(deleteModal.categoryId);
+        fetchCategories();
+        fetchItems(); // Refresh items as categories might be referenced
+        setDeleteModal({ isOpen: false, itemId: null, categoryId: null });
+        setToast({ message: 'Category deleted successfully', type: 'success' });
+      } catch (error) {
+        console.error('Error deleting category:', error);
+        setToast({ message: error.response?.data?.message || 'Failed to delete category', type: 'error' });
+      }
     }
   };
 
-  const filteredItems = items.filter(item => 
+  const validateCategoryForm = () => {
+    const errors = {};
+    
+    if (!categoryFormData.name || categoryFormData.name.trim() === '') {
+      errors.name = 'Category name is required';
+    }
+    
+    setValidationErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
+
+  const handleCategorySubmit = async (e) => {
+    e.preventDefault();
+    
+    if (!validateCategoryForm()) {
+      setToast({ message: 'Please fix validation errors', type: 'error' });
+      return;
+    }
+    
+    try {
+      if (currentCategory) {
+        await updateCategory(currentCategory._id, categoryFormData);
+        setToast({ message: 'Category updated successfully', type: 'success' });
+      } else {
+        await createCategory(categoryFormData);
+        setToast({ message: 'Category created successfully', type: 'success' });
+      }
+      fetchCategories();
+      setIsCategoryModalOpen(false);
+      setValidationErrors({});
+    } catch (error) {
+      console.error('Error saving category:', error);
+      setToast({ message: error.response?.data?.message || 'Failed to save category', type: 'error' });
+    }
+  };
+
+  const handleDeleteCategoryClick = (id) => {
+    setDeleteModal({ isOpen: true, itemId: null, categoryId: id });
+  };
+
+  const filteredItems = items.filter(item =>
     item.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    item.category.toLowerCase().includes(searchTerm.toLowerCase())
+    (item.category?.name || item.category || '').toLowerCase().includes(searchTerm.toLowerCase())
   );
+
+  const filteredCategories = categories.filter(category =>
+    category.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (category.description || '').toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
+  // Pagination logic
+  const itemsTotalPages = Math.ceil(filteredItems.length / itemsPerPage);
+  const categoriesTotalPages = Math.ceil(filteredCategories.length / itemsPerPage);
+
+  const itemsStartIndex = (currentPage - 1) * itemsPerPage;
+  const itemsEndIndex = itemsStartIndex + itemsPerPage;
+  const paginatedItems = filteredItems.slice(itemsStartIndex, itemsEndIndex);
+
+  const categoriesStartIndex = (currentPage - 1) * itemsPerPage;
+  const categoriesEndIndex = categoriesStartIndex + itemsPerPage;
+  const paginatedCategories = filteredCategories.slice(categoriesStartIndex, categoriesEndIndex);
 
   if (loading) return <div className="flex items-center justify-center h-full text-text-muted">Loading...</div>;
 
   return (
     <div className="h-full flex flex-col bg-background p-6">
-      <div className="flex justify-between items-center mb-6">
+      <div className="flex justify-between items-center mb-6 p-4 bg-gradient-to-r from-primary/5 to-accent/5 rounded-xl border border-border/50">
         <div>
           <h1 className="text-2xl font-bold text-text-main">Menu Management</h1>
-          <p className="text-text-muted">Manage your restaurant's menu items</p>
+          <p className="text-text-muted">Manage your restaurant's menu items and categories</p>
         </div>
-        <button 
-          onClick={() => handleOpenModal()}
-          className="flex items-center gap-2 bg-primary text-white px-4 py-2 rounded-lg hover:bg-primary-hover transition-colors shadow-lg shadow-primary/20"
-        >
-          <Plus size={20} />
-          <span>Add New Item</span>
-        </button>
+        <div className="flex gap-3">
+          <button
+            onClick={() => setActiveTab('categories')}
+            className={`px-4 py-2 rounded-lg font-medium transition-colors ${activeTab === 'categories' ? 'bg-primary text-white' : 'bg-surface text-text-muted hover:bg-surface-hover'}`}
+          >
+            Categories
+          </button>
+          <button
+            onClick={() => setActiveTab('items')}
+            className={`px-4 py-2 rounded-lg font-medium transition-colors ${activeTab === 'items' ? 'bg-primary text-white' : 'bg-surface text-text-muted hover:bg-surface-hover'}`}
+          >
+            Menu Items
+          </button>
+          {activeTab === 'items' && (
+            <button
+              onClick={() => handleOpenModal()}
+              className="flex items-center gap-2 bg-primary text-white px-4 py-2 rounded-lg hover:bg-primary-hover transition-colors shadow-lg shadow-primary/20"
+            >
+              <Plus size={20} />
+              <span>Add Item</span>
+            </button>
+          )}
+          {activeTab === 'categories' && (
+            <button
+              onClick={() => handleOpenCategoryModal()}
+              className="flex items-center gap-2 bg-secondary text-white px-4 py-2 rounded-lg hover:bg-accent transition-colors shadow-lg shadow-secondary/20"
+            >
+              <FolderPlus size={20} />
+              <span>Add Category</span>
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Search Bar */}
       <div className="mb-6 relative">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted" size={20} />
-        <input 
-          type="text" 
-          placeholder="Search items..." 
+        <input
+          type="text"
+          placeholder={`Search ${activeTab === 'items' ? 'items' : 'categories'}...`}
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
           className="w-full pl-10 pr-4 py-3 bg-surface border border-border rounded-xl focus:outline-none focus:border-primary text-text-main"
@@ -129,56 +322,163 @@ const MenuManagement = () => {
       {/* Table */}
       <div className="bg-surface border border-border rounded-xl overflow-hidden flex-1 flex flex-col shadow-sm">
         <div className="overflow-y-auto flex-1">
-          <table className="w-full text-left border-collapse">
-            <thead className="bg-background sticky top-0 z-10">
-              <tr>
-                <th className="p-4 font-semibold text-text-muted border-b border-border">Name</th>
-                <th className="p-4 font-semibold text-text-muted border-b border-border">Category</th>
-                <th className="p-4 font-semibold text-text-muted border-b border-border">Type</th>
-                <th className="p-4 font-semibold text-text-muted border-b border-border">Price</th>
-                <th className="p-4 font-semibold text-text-muted border-b border-border text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredItems.map(item => (
-                <tr key={item._id} className="border-b border-border hover:bg-surface-hover transition-colors group">
-                  <td className="p-4 font-medium text-text-main">{item.name}</td>
-                  <td className="p-4 text-text-muted">
-                    <span className="px-2 py-1 bg-background rounded-md border border-border text-xs">
-                      {item.category}
-                    </span>
-                  </td>
-                  <td className="p-4">
-                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                      item.type === 'veg' ? 'bg-success/10 text-success' : 'bg-danger/10 text-danger'
-                    }`}>
-                      {item.type === 'veg' ? 'Veg' : 'Non-Veg'}
-                    </span>
-                  </td>
-                  <td className="p-4 font-bold text-text-main">₹{item.price}</td>
-                  <td className="p-4 text-right">
-                    <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <button 
-                        onClick={() => handleOpenModal(item)}
-                        className="p-2 hover:bg-background rounded-lg text-primary transition-colors"
-                        title="Edit"
-                      >
-                        <Edit2 size={18} />
-                      </button>
-                      <button 
-                        onClick={() => handleDeleteClick(item._id)}
-                        className="p-2 hover:bg-background rounded-lg text-danger transition-colors"
-                        title="Delete"
-                      >
-                        <Trash2 size={18} />
-                      </button>
-                    </div>
-                  </td>
+          {activeTab === 'items' ? (
+            <table className="w-full text-left border-collapse">
+              <thead className="bg-background sticky top-0 z-10">
+                <tr>
+                  <th className="p-4 font-semibold text-text-muted border-b border-border">Name</th>
+                  <th className="p-4 font-semibold text-text-muted border-b border-border">Category</th>
+                  <th className="p-4 font-semibold text-text-muted border-b border-border">Type</th>
+                  <th className="p-4 font-semibold text-text-muted border-b border-border">Price</th>
+                  <th className="p-4 font-semibold text-text-muted border-b border-border text-right">Actions</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {paginatedItems.map(item => (
+                  <tr key={item._id} className="border-b border-border hover:bg-surface-hover transition-colors group">
+                    <td className="p-4 font-medium text-text-main">{item.name}</td>
+                    <td className="p-4 text-text-muted">
+                      <span className="px-2 py-1 bg-background rounded-md border border-border text-xs">
+                        {item.category?.name || item.category}
+                      </span>
+                    </td>
+                    <td className="p-4">
+                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                        item.type === 'veg' ? 'bg-success/10 text-success' : 'bg-danger/10 text-danger'
+                      }`}>
+                        {item.type === 'veg' ? 'Veg' : 'Non-Veg'}
+                      </span>
+                    </td>
+                    <td className="p-4 font-bold text-text-main">₹{item.price}</td>
+                    <td className="p-4 text-right">
+                      <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <button
+                          onClick={() => handleOpenModal(item)}
+                          className="p-2 hover:bg-background rounded-lg text-primary transition-colors"
+                          title="Edit"
+                        >
+                          <Edit2 size={18} />
+                        </button>
+                        <button
+                          onClick={() => handleDeleteClick(item._id)}
+                          className="p-2 hover:bg-background rounded-lg text-danger transition-colors"
+                          title="Delete"
+                        >
+                          <Trash2 size={18} />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          ) : (
+            <table className="w-full text-left border-collapse">
+              <thead className="bg-background sticky top-0 z-10">
+                <tr>
+                  <th className="p-4 font-semibold text-text-muted border-b border-border">Name</th>
+                  <th className="p-4 font-semibold text-text-muted border-b border-border">Description</th>
+                  <th className="p-4 font-semibold text-text-muted border-b border-border">Sort Order</th>
+                  <th className="p-4 font-semibold text-text-muted border-b border-border">Status</th>
+                  <th className="p-4 font-semibold text-text-muted border-b border-border text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {paginatedCategories.map(category => (
+                  <tr key={category._id} className="border-b border-border hover:bg-surface-hover transition-colors group">
+                    <td className="p-4 font-medium text-text-main">{category.name}</td>
+                    <td className="p-4 text-text-muted">{category.description || '-'}</td>
+                    <td className="p-4 text-text-muted">{category.sortOrder}</td>
+                    <td className="p-4">
+                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                        category.isActive ? 'bg-success/10 text-success' : 'bg-danger/10 text-danger'
+                      }`}>
+                        {category.isActive ? 'Active' : 'Inactive'}
+                      </span>
+                    </td>
+                    <td className="p-4 text-right">
+                      <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <button
+                          onClick={() => handleOpenCategoryModal(category)}
+                          className="p-2 hover:bg-background rounded-lg text-primary transition-colors"
+                          title="Edit"
+                        >
+                          <Edit2 size={18} />
+                        </button>
+                        <button
+                          onClick={() => handleDeleteCategoryClick(category._id)}
+                          className="p-2 hover:bg-background rounded-lg text-danger transition-colors"
+                          title="Delete"
+                        >
+                          <Trash2 size={18} />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
         </div>
+        
+        {/* Pagination Controls */}
+        {((activeTab === 'items' && itemsTotalPages > 1) || (activeTab === 'categories' && categoriesTotalPages > 1)) && (
+          <div className="p-4 border-t border-border flex items-center justify-between bg-background">
+            <div className="text-sm text-text-muted">
+              Showing {activeTab === 'items' ? itemsStartIndex + 1 : categoriesStartIndex + 1} to{' '}
+              {activeTab === 'items' 
+                ? Math.min(itemsEndIndex, filteredItems.length) 
+                : Math.min(categoriesEndIndex, filteredCategories.length)
+              } of{' '}
+              {activeTab === 'items' ? filteredItems.length : filteredCategories.length}{' '}
+              {activeTab === 'items' ? 'items' : 'categories'}
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                disabled={currentPage === 1}
+                className="p-2 rounded-lg border border-border bg-surface text-text-main disabled:opacity-50 disabled:cursor-not-allowed hover:bg-surface-hover transition-colors"
+              >
+                <ChevronLeft size={18} />
+              </button>
+              <div className="flex items-center gap-1">
+                {[...Array(activeTab === 'items' ? itemsTotalPages : categoriesTotalPages)].map((_, i) => {
+                  const page = i + 1;
+                  const totalPages = activeTab === 'items' ? itemsTotalPages : categoriesTotalPages;
+                  if (
+                    page === 1 ||
+                    page === totalPages ||
+                    (page >= currentPage - 1 && page <= currentPage + 1)
+                  ) {
+                    return (
+                      <button
+                        key={page}
+                        onClick={() => setCurrentPage(page)}
+                        className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                          currentPage === page
+                            ? 'bg-primary text-white'
+                            : 'bg-surface text-text-muted hover:bg-surface-hover hover:text-text-main border border-border'
+                        }`}
+                      >
+                        {page}
+                      </button>
+                    );
+                  } else if (page === currentPage - 2 || page === currentPage + 2) {
+                    return <span key={page} className="px-2 text-text-muted">...</span>;
+                  }
+                  return null;
+                })}
+              </div>
+              <button
+                onClick={() => setCurrentPage(prev => Math.min(activeTab === 'items' ? itemsTotalPages : categoriesTotalPages, prev + 1))}
+                disabled={currentPage === (activeTab === 'items' ? itemsTotalPages : categoriesTotalPages)}
+                className="p-2 rounded-lg border border-border bg-surface text-text-main disabled:opacity-50 disabled:cursor-not-allowed hover:bg-surface-hover transition-colors"
+              >
+                <ChevronRight size={18} />
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Modal */}
@@ -204,34 +504,65 @@ const MenuManagement = () => {
                   type="text" 
                   required
                   value={formData.name}
-                  onChange={(e) => setFormData({...formData, name: e.target.value})}
-                  className="w-full bg-background border border-border rounded-lg px-4 py-2 text-text-main focus:outline-none focus:border-primary"
+                  onChange={(e) => {
+                    setFormData({...formData, name: e.target.value});
+                    if (validationErrors.name) setValidationErrors({...validationErrors, name: null});
+                  }}
+                  className={`w-full bg-background border rounded-lg px-4 py-2 text-text-main focus:outline-none focus:border-primary ${
+                    validationErrors.name ? 'border-danger' : 'border-border'
+                  }`}
                   placeholder="e.g. Butter Chicken"
                 />
+                {validationErrors.name && (
+                  <p className="text-xs text-danger">{validationErrors.name}</p>
+                )}
               </div>
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1">
                   <label className="text-sm font-medium text-text-muted">Category</label>
-                  <input 
-                    type="text" 
+                  <select
                     required
                     value={formData.category}
-                    onChange={(e) => setFormData({...formData, category: e.target.value})}
-                    className="w-full bg-background border border-border rounded-lg px-4 py-2 text-text-main focus:outline-none focus:border-primary"
-                    placeholder="e.g. Main Course"
-                  />
+                    onChange={(e) => {
+                      setFormData({...formData, category: e.target.value});
+                      if (validationErrors.category) setValidationErrors({...validationErrors, category: null});
+                    }}
+                    className={`w-full bg-background border rounded-lg px-4 py-2 text-text-main focus:outline-none focus:border-primary ${
+                      validationErrors.category ? 'border-danger' : 'border-border'
+                    }`}
+                  >
+                    <option value="">Select Category</option>
+                    {categories.map(cat => (
+                      <option key={cat._id} value={cat.name}>
+                        {cat.name}
+                      </option>
+                    ))}
+                  </select>
+                  {validationErrors.category && (
+                    <p className="text-xs text-danger">{validationErrors.category}</p>
+                  )}
                 </div>
                 <div className="space-y-1">
                   <label className="text-sm font-medium text-text-muted">Price (₹)</label>
                   <input 
                     type="number" 
                     required
+                    min="0"
+                    step="0.01"
                     value={formData.price}
-                    onChange={(e) => setFormData({...formData, price: e.target.value})}
-                    className="w-full bg-background border border-border rounded-lg px-4 py-2 text-text-main focus:outline-none focus:border-primary"
+                    onChange={(e) => {
+                      setFormData({...formData, price: e.target.value});
+                      if (validationErrors.price) setValidationErrors({...validationErrors, price: null});
+                    }}
+                    className={`w-full bg-background border rounded-lg px-4 py-2 text-text-main focus:outline-none focus:border-primary ${
+                      validationErrors.price ? 'border-danger' : 'border-border'
+                    }`}
                     placeholder="0.00"
                   />
+                  {validationErrors.price && (
+                    <p className="text-xs text-danger">{validationErrors.price}</p>
+                  )}
                 </div>
               </div>
 
@@ -286,17 +617,97 @@ const MenuManagement = () => {
         </div>
       )}
 
-      <ConfirmationModal 
+      {/* Category Modal */}
+      {isCategoryModalOpen && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-surface w-full max-w-md rounded-2xl shadow-2xl border border-border flex flex-col max-h-[90vh]">
+            <div className="flex justify-between items-center p-6 border-b border-border">
+              <h2 className="text-xl font-bold text-text-main">
+                {currentCategory ? 'Edit Category' : 'Add New Category'}
+              </h2>
+              <button
+                onClick={() => setIsCategoryModalOpen(false)}
+                className="text-text-muted hover:text-text-main transition-colors"
+              >
+                <X size={24} />
+              </button>
+            </div>
+
+            <form onSubmit={handleCategorySubmit} className="p-6 space-y-4 overflow-y-auto">
+              <div className="space-y-1">
+                <label className="text-sm font-medium text-text-muted">Category Name</label>
+                <input
+                  type="text"
+                  required
+                  value={categoryFormData.name}
+                  onChange={(e) => {
+                    setCategoryFormData({...categoryFormData, name: e.target.value});
+                    if (validationErrors.name) setValidationErrors({...validationErrors, name: null});
+                  }}
+                  className={`w-full bg-background border rounded-lg px-4 py-2 text-text-main focus:outline-none focus:border-primary ${
+                    validationErrors.name ? 'border-danger' : 'border-border'
+                  }`}
+                  placeholder="e.g. Main Course"
+                />
+                {validationErrors.name && (
+                  <p className="text-xs text-danger">{validationErrors.name}</p>
+                )}
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-sm font-medium text-text-muted">Description</label>
+                <textarea
+                  value={categoryFormData.description}
+                  onChange={(e) => setCategoryFormData({...categoryFormData, description: e.target.value})}
+                  className="w-full bg-background border border-border rounded-lg px-4 py-2 text-text-main focus:outline-none focus:border-primary h-24 resize-none"
+                  placeholder="Category description..."
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-sm font-medium text-text-muted">Sort Order</label>
+                <input
+                  type="number"
+                  value={categoryFormData.sortOrder}
+                  onChange={(e) => setCategoryFormData({...categoryFormData, sortOrder: e.target.value})}
+                  className="w-full bg-background border border-border rounded-lg px-4 py-2 text-text-main focus:outline-none focus:border-primary"
+                  placeholder="0"
+                />
+              </div>
+
+              <div className="pt-4">
+                <button
+                  type="submit"
+                  className="w-full bg-secondary text-white py-3 rounded-xl font-bold hover:bg-accent transition-colors shadow-lg shadow-secondary/20"
+                >
+                  {currentCategory ? 'Update Category' : 'Create Category'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      <ConfirmationModal
         isOpen={deleteModal.isOpen}
-        onClose={() => setDeleteModal({ isOpen: false, itemId: null })}
+        onClose={() => setDeleteModal({ isOpen: false, itemId: null, categoryId: null })}
         onConfirm={confirmDelete}
-        title="Delete Item"
-        message="Are you sure you want to delete this menu item? This action cannot be undone."
+        title={deleteModal.itemId ? "Delete Item" : "Delete Category"}
+        message={`Are you sure you want to delete this ${deleteModal.itemId ? 'menu item' : 'category'}? This action cannot be undone.`}
         confirmText="Delete"
         isDanger={true}
       />
+
+      {toast && (
+        <Toast
+          message={toast.message}
+          type={toast.type}
+          onClose={() => setToast(null)}
+        />
+      )}
     </div>
   );
 };
 
 export default MenuManagement;
+

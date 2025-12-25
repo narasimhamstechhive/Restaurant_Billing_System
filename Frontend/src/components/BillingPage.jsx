@@ -4,7 +4,7 @@ import BillSummary from './BillSummary';
 import PaymentModal from './PaymentModal';
 import Invoice from './Invoice';
 import Toast from './Toast';
-import { getActiveOrder, saveOrder, generateBill, settleBill, getBills } from '../api/billing';
+import { getActiveOrder, saveOrder, generateBill, settleBill } from '../api/billing';
 import { Search, UtensilsCrossed, Maximize, Minimize, TrendingUp, ShoppingBag, LayoutGrid } from 'lucide-react';
 import useDebounce from '../hooks/useDebounce';
 
@@ -93,16 +93,13 @@ const BillingPage = ({ initialTable, onOrderUpdate }) => {
 
   const fetchDailyStats = async () => {
     try {
-      const bills = await getBills();
-      const today = new Date().toLocaleDateString();
-      const todaysBills = bills.filter(bill => new Date(bill.createdAt).toLocaleDateString() === today);
-      
-      const sales = todaysBills.reduce((sum, bill) => sum + bill.total, 0);
-      const orders = todaysBills.length;
-      
-      setDailyStats({ sales, orders });
+      const { getDailyStats } = await import('../api/billing');
+      const stats = await getDailyStats();
+      setDailyStats(stats);
     } catch (error) {
       console.error('Error fetching daily stats:', error);
+      // Fallback to 0 if API fails
+      setDailyStats({ sales: 0, orders: 0 });
     }
   };
 
@@ -160,7 +157,7 @@ const BillingPage = ({ initialTable, onOrderUpdate }) => {
   const calculateSubtotal = () => cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
   
   const calculateDiscount = (subtotal) => {
-    const val = discount.value === '' ? 0 : discount.value;
+    const val = discount.value === '' ? 0 : parseFloat(discount.value) || 0;
     if (discount.type === 'percentage') {
       return (subtotal * val) / 100;
     }
@@ -170,7 +167,7 @@ const BillingPage = ({ initialTable, onOrderUpdate }) => {
   const subtotal = calculateSubtotal();
   const discountAmount = calculateDiscount(subtotal);
   const taxableAmount = subtotal - discountAmount;
-  const taxVal = taxRate === '' ? 0 : taxRate;
+  const taxVal = taxRate === '' ? 0 : parseFloat(taxRate) || 0;
   const taxAmount = (taxableAmount * taxVal) / 100;
   const total = taxableAmount + taxAmount;
 
@@ -265,10 +262,16 @@ const BillingPage = ({ initialTable, onOrderUpdate }) => {
       setOrderStatus('Paid');
       setShowPayment(false);
       
-      // Update completed bill with paid status and details
-      setCompletedBill({ ...settledOrder, items: cart }); // Ensure items are preserved
+      // Update completed bill with paid status and all details
+      // The bill is now saved to billing history (status: 'Paid')
+      setCompletedBill({ 
+        ...settledOrder, 
+        items: cart, // Ensure items are preserved
+        status: 'Paid', // Explicitly set status
+        paymentMode: paymentData.mode // Ensure payment mode is set
+      });
       
-      showToast('Bill Settled Successfully!', 'success');
+      showToast('Bill Settled Successfully! Saved to billing history.', 'success');
       fetchDailyStats();
       if (onOrderUpdate) onOrderUpdate();
       setShowInvoice(true); // Show Invoice AFTER payment
@@ -280,20 +283,34 @@ const BillingPage = ({ initialTable, onOrderUpdate }) => {
     }
   };
 
-  const handleFinish = () => {
+  const handleFinish = async () => {
+    // Verify bill is saved before closing
+    if (completedBill && completedBill.status === 'Paid') {
+      // Bill is already saved to history (status is 'Paid')
+      // Show confirmation message
+      showToast(`Bill ${completedBill.billNumber || 'saved'} has been saved to billing history!`, 'success');
+    }
+    
+    // Close invoice and reset state
     setShowInvoice(false);
     setCart([]);
     setOrderId(null);
     setOrderStatus('Open');
     setBillNumber(null);
+    setCompletedBill(null);
     fetchActiveOrder(); // Refresh to ensure clean state
-    showToast('Ready for new order', 'info');
+    
+    // Refresh daily stats to reflect the new bill
+    fetchDailyStats();
+    
+    // Notify parent component to refresh active orders
+    if (onOrderUpdate) onOrderUpdate();
   };
 
   return (
     <div className="h-full flex flex-col overflow-hidden bg-background">
       {/* Custom Header for Billing Page */}
-      <div className="h-16 flex items-center justify-between px-6 bg-surface border-b border-border shrink-0 z-20 shadow-sm">
+      <div className="h-16 flex items-center justify-between px-6 bg-gradient-to-r from-primary/10 via-accent/5 to-secondary/10 border-b border-border shrink-0 z-20 shadow-sm">
         <div className="flex items-center gap-3 font-bold text-xl text-primary">
           <div className="w-8 h-8 bg-primary text-white rounded-lg flex items-center justify-center shadow-lg shadow-primary/20">
             <UtensilsCrossed size={18} />

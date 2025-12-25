@@ -1,31 +1,54 @@
 import React, { useState, useEffect } from 'react';
 import Invoice from './Invoice';
-import { Search, Eye, CreditCard, Filter, Trash2 } from 'lucide-react';
-import { getBills, deleteBill } from '../api/billing';
+import { Search, Eye, CreditCard, Filter, Trash2, ChevronLeft, ChevronRight } from 'lucide-react';
+import { getBills, deleteBill, getBillById } from '../api/billing';
 import useDebounce from '../hooks/useDebounce';
 import ConfirmationModal from './ConfirmationModal';
+import Toast from './Toast';
 
 const BillHistory = () => {
   const [bills, setBills] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedBill, setSelectedBill] = useState(null);
+  const [loadingBill, setLoadingBill] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterType, setFilterType] = useState('All');
   const [deleteModal, setDeleteModal] = useState({ isOpen: false, billId: null });
+  const [toast, setToast] = useState(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pagination, setPagination] = useState({ totalBills: 0, totalPages: 1, currentPage: 1 });
+  const itemsPerPage = 20; // Server-side pagination - Show 20 bills per page (latest first)
   
   const debouncedSearchTerm = useDebounce(searchTerm, 300);
 
   useEffect(() => {
     fetchBills();
+  }, [currentPage, debouncedSearchTerm, filterType]);
+
+  // Refresh bills when component mounts to show latest bills first
+  useEffect(() => {
+    // Reset to page 1 and fetch latest bills when component mounts
+    setCurrentPage(1);
+    fetchBills();
   }, []);
 
   const fetchBills = async () => {
+    setLoading(true);
     try {
-      const data = await getBills();
-      setBills(data);
-      setLoading(false);
+      const data = await getBills(currentPage, itemsPerPage, debouncedSearchTerm);
+      
+      // Handle both old format (array) and new format (object with pagination)
+      if (Array.isArray(data)) {
+        setBills(data);
+        setPagination({ totalBills: data.length, totalPages: 1, currentPage: 1 });
+      } else {
+        setBills(data.bills || []);
+        setPagination(data.pagination || { totalBills: 0, totalPages: 1, currentPage: 1 });
+      }
     } catch (error) {
       console.error('Error fetching bills:', error);
+      setToast({ message: 'Failed to load bills', type: 'error' });
+    } finally {
       setLoading(false);
     }
   };
@@ -41,23 +64,88 @@ const BillHistory = () => {
       await deleteBill(deleteModal.billId);
       setBills(bills.filter(bill => bill._id !== deleteModal.billId));
       setDeleteModal({ isOpen: false, billId: null });
+      setToast({ message: 'Bill deleted successfully', type: 'success' });
     } catch (error) {
       console.error('Error deleting bill:', error);
-      alert('Failed to delete bill');
+      setToast({ message: error.response?.data?.message || 'Failed to delete bill', type: 'error' });
     }
   };
 
+  // Client-side filtering for bill type and payment mode (server handles search)
+  // Bills are already sorted by newest first from backend (updatedAt: -1)
+  // This ensures recently paid bills appear at the top
+  // We maintain this order - no re-sorting needed
   const filteredBills = bills.filter(bill => {
-    const matchesSearch = bill.billNumber.toLowerCase().includes(debouncedSearchTerm.toLowerCase());
-    const matchesFilter = filterType === 'All' || bill.billType === filterType;
-    return matchesSearch && matchesFilter;
+    if (filterType === 'All') {
+      return true;
+    } else if (filterType === 'Dine-In' || filterType === 'Takeaway') {
+      return bill.billType === filterType;
+    } else if (filterType === 'Cash' || filterType === 'UPI' || filterType === 'Card') {
+      return bill.paymentMode === filterType;
+    }
+    return true;
   });
+  
+  // Ensure bills remain sorted by newest first (backend already does this, but double-check)
+  // filteredBills are already in correct order from backend, no need to sort again
 
-  if (loading) return <div className="flex items-center justify-center h-full text-text-muted">Loading History...</div>;
+  // Reset to first page when filter/search changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [debouncedSearchTerm, filterType]);
+
+  if (loading) return (
+    <div className="h-full flex flex-col bg-background p-6">
+      <div className="flex justify-between items-center mb-6 p-4 bg-gradient-to-r from-primary/5 to-accent/5 rounded-xl border border-border/50">
+        <div className="animate-pulse">
+          <div className="w-40 h-6 bg-text-muted/20 rounded mb-2"></div>
+          <div className="w-48 h-4 bg-text-muted/20 rounded"></div>
+        </div>
+        <div className="flex gap-4 animate-pulse">
+          <div className="w-64 h-10 bg-surface-hover rounded-xl"></div>
+          <div className="w-32 h-10 bg-surface-hover rounded-xl"></div>
+        </div>
+      </div>
+      <div className="bg-surface border border-border rounded-xl overflow-hidden flex-1 flex flex-col shadow-sm">
+        <div className="overflow-y-auto flex-1">
+          <table className="w-full text-left border-collapse">
+            <thead className="bg-background">
+              <tr>
+                <th className="p-4"><div className="w-12 h-4 bg-text-muted/20 rounded animate-pulse"></div></th>
+                <th className="p-4"><div className="w-20 h-4 bg-text-muted/20 rounded animate-pulse"></div></th>
+                <th className="p-4"><div className="w-12 h-4 bg-text-muted/20 rounded animate-pulse"></div></th>
+                <th className="p-4"><div className="w-16 h-4 bg-text-muted/20 rounded animate-pulse"></div></th>
+                <th className="p-4"><div className="w-12 h-4 bg-text-muted/20 rounded animate-pulse"></div></th>
+                <th className="p-4"><div className="w-16 h-4 bg-text-muted/20 rounded animate-pulse"></div></th>
+              </tr>
+            </thead>
+            <tbody>
+              {[...Array(8)].map((_, i) => (
+                <tr key={i} className="border-b border-border animate-pulse">
+                  <td className="p-4"><div className="w-8 h-4 bg-text-muted/20 rounded"></div></td>
+                  <td className="p-4">
+                    <div className="w-16 h-4 bg-text-muted/20 rounded mb-1"></div>
+                    <div className="w-12 h-3 bg-text-muted/20 rounded"></div>
+                  </td>
+                  <td className="p-4"><div className="w-12 h-5 bg-text-muted/20 rounded"></div></td>
+                  <td className="p-4"><div className="w-16 h-4 bg-text-muted/20 rounded"></div></td>
+                  <td className="p-4"><div className="w-10 h-4 bg-text-muted/20 rounded"></div></td>
+                  <td className="p-4"><div className="flex justify-end gap-2">
+                    <div className="w-8 h-8 bg-text-muted/20 rounded"></div>
+                    <div className="w-8 h-8 bg-text-muted/20 rounded"></div>
+                  </div></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
 
   return (
     <div className="h-full flex flex-col bg-background p-6">
-      <div className="flex justify-between items-center mb-6">
+      <div className="flex justify-between items-center mb-6 p-4 bg-gradient-to-r from-primary/5 to-accent/5 rounded-xl border border-border/50">
         <div>
           <h1 className="text-2xl font-bold text-text-main">Transaction History</h1>
           <p className="text-text-muted">View and manage past transactions</p>
@@ -66,25 +154,28 @@ const BillHistory = () => {
         <div className="flex gap-4">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted" size={18} />
-            <input 
-              type="text" 
-              placeholder="Search Bill #..." 
+            <input
+              type="text"
+              placeholder="Search Bill #..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="pl-10 pr-4 py-2 bg-surface border border-border rounded-xl focus:outline-none focus:border-primary text-text-main w-64"
             />
           </div>
-          
+
           <div className="relative">
             <Filter className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted" size={18} />
-            <select 
+            <select
               value={filterType}
               onChange={(e) => setFilterType(e.target.value)}
               className="pl-10 pr-8 py-2 bg-surface border border-border rounded-xl focus:outline-none focus:border-primary text-text-main appearance-none cursor-pointer"
             >
-              <option value="All">All Types</option>
+              <option value="All">All</option>
               <option value="Dine-In">Dine-In</option>
               <option value="Takeaway">Takeaway</option>
+              <option value="Cash">Cash</option>
+              <option value="UPI">UPI</option>
+              <option value="Card">Card</option>
             </select>
           </div>
         </div>
@@ -96,7 +187,12 @@ const BillHistory = () => {
             <thead className="bg-background sticky top-0 z-10">
               <tr>
                 <th className="p-4 font-semibold text-text-muted border-b border-border">Bill #</th>
-                <th className="p-4 font-semibold text-text-muted border-b border-border">Date & Time</th>
+                <th className="p-4 font-semibold text-text-muted border-b border-border">
+                  <div className="flex items-center gap-2">
+                    Date & Time
+                    <span className="text-xs text-primary font-normal">(Latest First)</span>
+                  </div>
+                </th>
                 <th className="p-4 font-semibold text-text-muted border-b border-border">Type</th>
                 <th className="p-4 font-semibold text-text-muted border-b border-border">Payment</th>
                 <th className="p-4 font-semibold text-text-muted border-b border-border text-right">Total</th>
@@ -116,8 +212,8 @@ const BillHistory = () => {
                     <td className="p-4 font-medium text-text-main">#{bill.billNumber}</td>
                     <td className="p-4 text-text-muted">
                       <div className="flex flex-col">
-                        <span className="text-sm font-medium text-text-main">{new Date(bill.createdAt).toLocaleDateString()}</span>
-                        <span className="text-xs">{new Date(bill.createdAt).toLocaleTimeString()}</span>
+                        <span className="text-sm font-medium text-text-main">{new Date(bill.updatedAt || bill.createdAt).toLocaleDateString()}</span>
+                        <span className="text-xs">{new Date(bill.updatedAt || bill.createdAt).toLocaleTimeString()}</span>
                       </div>
                     </td>
                     <td className="p-4">
@@ -139,8 +235,21 @@ const BillHistory = () => {
                     <td className="p-4 text-center">
                       <div className="flex justify-center gap-2">
                         <button 
-                          onClick={() => setSelectedBill(bill)}
-                          className="p-2 hover:bg-background rounded-lg text-primary transition-colors inline-flex items-center gap-2"
+                          onClick={async () => {
+                            setLoadingBill(true);
+                            try {
+                              // Fetch full bill details with all items
+                              const fullBill = await getBillById(bill._id);
+                              setSelectedBill(fullBill);
+                            } catch (error) {
+                              console.error('Error fetching bill details:', error);
+                              setToast({ message: 'Failed to load bill details', type: 'error' });
+                            } finally {
+                              setLoadingBill(false);
+                            }
+                          }}
+                          disabled={loadingBill}
+                          className="p-2 hover:bg-background rounded-lg text-primary transition-colors inline-flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                           title="View Invoice"
                         >
                           <Eye size={18} />
@@ -160,6 +269,61 @@ const BillHistory = () => {
             </tbody>
           </table>
         </div>
+        
+        {/* Pagination Controls - Same style as MenuManagement */}
+        {pagination.totalPages > 1 && (
+          <div className="p-4 border-t border-border flex items-center justify-between bg-background">
+            <div className="text-sm text-text-muted">
+              Showing {((currentPage - 1) * itemsPerPage) + 1} to{' '}
+              {Math.min(currentPage * itemsPerPage, pagination.totalBills)} of{' '}
+              {pagination.totalBills} bills
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                disabled={currentPage === 1 || loading}
+                className="p-2 rounded-lg border border-border bg-surface text-text-main disabled:opacity-50 disabled:cursor-not-allowed hover:bg-surface-hover transition-colors"
+              >
+                <ChevronLeft size={18} />
+              </button>
+              <div className="flex items-center gap-1">
+                {[...Array(pagination.totalPages)].map((_, i) => {
+                  const page = i + 1;
+                  if (
+                    page === 1 ||
+                    page === pagination.totalPages ||
+                    (page >= currentPage - 1 && page <= currentPage + 1)
+                  ) {
+                    return (
+                      <button
+                        key={page}
+                        onClick={() => setCurrentPage(page)}
+                        disabled={loading}
+                        className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                          currentPage === page
+                            ? 'bg-primary text-white'
+                            : 'bg-surface text-text-muted hover:bg-surface-hover hover:text-text-main border border-border'
+                        }`}
+                      >
+                        {page}
+                      </button>
+                    );
+                  } else if (page === currentPage - 2 || page === currentPage + 2) {
+                    return <span key={page} className="px-2 text-text-muted">...</span>;
+                  }
+                  return null;
+                })}
+              </div>
+              <button
+                onClick={() => setCurrentPage(prev => Math.min(pagination.totalPages, prev + 1))}
+                disabled={currentPage === pagination.totalPages || loading}
+                className="p-2 rounded-lg border border-border bg-surface text-text-main disabled:opacity-50 disabled:cursor-not-allowed hover:bg-surface-hover transition-colors"
+              >
+                <ChevronRight size={18} />
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {selectedBill && (
@@ -178,6 +342,14 @@ const BillHistory = () => {
         confirmText="Delete"
         isDanger={true}
       />
+
+      {toast && (
+        <Toast
+          message={toast.message}
+          type={toast.type}
+          onClose={() => setToast(null)}
+        />
+      )}
     </div>
   );
 };

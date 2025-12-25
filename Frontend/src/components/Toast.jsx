@@ -24,7 +24,7 @@ const Toast = ({ message, type = 'info', onClose, duration = 3000 }) => {
   };
 
   return (
-    <div className="fixed top-6 left-1/2 -translate-x-1/2 z-[100] animate-in slide-in-from-top-4 fade-in duration-300">
+    <div className="fixed top-6 left-1/2 -translate-x-1/2 z-[100] animate-in slide-in-from-top-4 fade-in duration-300 print:hidden">
       <div className={`${bgColors[type]} text-white px-6 py-3 rounded-full shadow-xl flex items-center gap-3 min-w-[300px] max-w-md`}>
         {icons[type]}
         <p className="font-medium text-sm flex-1">{message}</p>

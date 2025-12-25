@@ -19,7 +19,7 @@ const PaymentModal = ({ total, onClose, onComplete }) => {
   return (
     <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
       <div className="bg-surface w-full max-w-md rounded-2xl border border-border shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
-        <div className="p-4 border-b border-border flex justify-between items-center bg-surface">
+        <div className="p-4 border-b border-border flex justify-between items-center bg-gradient-to-r from-primary/5 to-accent/5">
           <h2 className="font-bold text-lg text-text-main">Complete Payment</h2>
           <button onClick={onClose} className="text-text-muted hover:text-text-main transition-colors">
             <X size={20} />

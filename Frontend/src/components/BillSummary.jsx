@@ -31,7 +31,7 @@ const BillSummary = ({
       {/* Receipt Top Edge */}
       <div className="absolute top-0 left-0 right-0 h-2 bg-[radial-gradient(circle,transparent_50%,#ffffff_50%)] bg-[length:16px_16px] -mt-2 rotate-180"></div>
 
-      <div className="p-6 border-b-2 border-dashed border-border/50 bg-surface z-10 flex justify-between items-center">
+      <div className="p-6 border-b-2 border-dashed border-border/50 bg-gradient-to-r from-primary/5 to-accent/5 z-10 flex justify-between items-center">
         <div>
           <h2 className="text-xl font-bold text-text-main font-mono tracking-tight">CURRENT ORDER</h2>
           <div className="flex items-center gap-3 text-xs text-text-muted mt-1 font-mono">
