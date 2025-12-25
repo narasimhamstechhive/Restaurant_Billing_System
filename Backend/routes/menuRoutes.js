@@ -1,10 +1,14 @@
 const express = require('express');
 const router = express.Router();
 const menuController = require('../controllers/menuController');
+const { authenticateToken, requireAdmin } = require('../middleware/auth');
 
+// GET menu items - public (for billing page)
 router.get('/', menuController.getAllMenuItems);
-router.post('/', menuController.addMenuItem);
-router.put('/:id', menuController.updateMenuItem);
-router.delete('/:id', menuController.deleteMenuItem);
+
+// POST, PUT, DELETE - Admin only
+router.post('/', authenticateToken, requireAdmin, menuController.addMenuItem);
+router.put('/:id', authenticateToken, requireAdmin, menuController.updateMenuItem);
+router.delete('/:id', authenticateToken, requireAdmin, menuController.deleteMenuItem);
 
 module.exports = router;

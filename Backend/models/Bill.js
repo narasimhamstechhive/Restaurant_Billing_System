@@ -53,4 +53,11 @@ const billSchema = new mongoose.Schema({
   timestamps: true
 });
 
+// Add indexes for performance optimization (critical for 150+ orders/day)
+billSchema.index({ status: 1, createdAt: -1 }); // For getBills and getOpenOrders
+billSchema.index({ tableNo: 1, status: 1 }); // For getActiveOrder
+billSchema.index({ createdAt: -1, status: 1 }); // For analytics queries
+billSchema.index({ paymentMode: 1, createdAt: -1 }); // For payment method analytics
+billSchema.index({ billType: 1, createdAt: -1 }); // For bill type filtering
+
 module.exports = mongoose.model('Bill', billSchema);

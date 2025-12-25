@@ -12,12 +12,36 @@ const menuSchema = new mongoose.Schema({
     min: 0
   },
   category: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Category',
+    required: true
+  },
+  type: {
     type: String,
-    required: true,
+    enum: ['veg', 'non-veg'],
+    default: 'veg'
+  },
+  description: {
+    type: String,
     trim: true
+  },
+  isAvailable: {
+    type: Boolean,
+    default: true
+  },
+  taxRate: {
+    type: Number,
+    default: 0,
+    min: 0
   }
 }, {
   timestamps: true
 });
+
+// Add indexes for better performance
+menuSchema.index({ isAvailable: 1 });
+menuSchema.index({ category: 1 });
+menuSchema.index({ name: 1 });
+menuSchema.index({ isAvailable: 1, category: 1 });
 
 module.exports = mongoose.model('Menu', menuSchema);

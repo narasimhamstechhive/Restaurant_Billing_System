@@ -1,4 +1,5 @@
 const Bill = require('../models/Bill');
+const cache = require('../utils/cache');
 
 // Get active order for a table
 const getActiveOrder = async (req, res) => {
@@ -19,7 +20,6 @@ const saveOrder = async (req, res) => {
   try {
     const { tableNo, items, customerName, customerPhone, kitchenNotes, billType } = req.body;
 
-    console.log('Saving Order:', { tableNo, itemsCount: items?.length, billType });
 
     // Sanitize items and calculate item totals
     const sanitizedItems = items.map(item => ({
@@ -63,6 +63,10 @@ const saveOrder = async (req, res) => {
       });
     }
     
+    // Clear cache when order is updated
+    cache.clear('dailyStats');
+    cache.clear('openOrders');
+    
     res.status(200).json(order);
   } catch (error) {
     console.error('Error in saveOrder:', error);
@@ -75,64 +79,37 @@ const generateBill = async (req, res) => {
   try {
     const { id } = req.params;
     const { discount, tax } = req.body;
-    
+
     const order = await Bill.findById(id);
     if (!order) return res.status(404).json({ message: 'Order not found' });
     if (order.status !== 'Open') return res.status(400).json({ message: 'Order already billed or paid' });
 
-    // Generate Bill Number with Robust Retry Logic
-    // 1. Find the highest bill number currently visible
-    const lastBill = await Bill.findOne({ 
-      billNumber: { $exists: true, $ne: null } 
-    }).sort({ billNumber: -1 });
+    // Generate Bill Number using timestamp for uniqueness
+    const billNumber = `BILL-${Date.now()}`;
 
-    let nextBillNum = 1;
-    if (lastBill && lastBill.billNumber) {
-      const lastNum = parseInt(lastBill.billNumber.replace('BILL-', ''));
-      if (!isNaN(lastNum)) {
-        nextBillNum = lastNum + 1;
-      }
-    }
+    order.status = 'Billed';
+    order.billNumber = billNumber;
+    order.discount = Number(discount) || 0;
+    order.tax = Number(tax) || 0;
 
-    let retries = 0;
-    const maxRetries = 5;
+    // Calculate final total
+    const taxableAmount = order.subtotal - order.discount;
+    const taxAmount = (taxableAmount * order.tax) / 100;
+    order.total = Math.round(taxableAmount + taxAmount);
+
+    await order.save();
     
-    while (retries < maxRetries) {
-      try {
-        const billNumber = `BILL-${String(nextBillNum).padStart(4, '0')}`;
-
-        order.status = 'Billed';
-        order.billNumber = billNumber;
-        order.discount = discount || 0;
-        order.tax = tax || 0;
-        
-        // Calculate final total
-        const taxableAmount = order.subtotal - order.discount;
-        const taxAmount = (taxableAmount * order.tax) / 100;
-        order.total = Math.round(taxableAmount + taxAmount);
-
-        await order.save();
-        return res.json(order); // Success!
-        
-      } catch (saveError) {
-        if (saveError.code === 11000 && saveError.keyPattern && saveError.keyPattern.billNumber) {
-          console.warn(`Duplicate bill number ${order.billNumber} detected. Incrementing and retrying...`);
-          nextBillNum++; // Just try the next number
-          retries++;
-          if (retries === maxRetries) {
-            throw new Error('Failed to generate unique bill number after multiple attempts');
-          }
-        } else {
-          throw saveError; // Re-throw other errors
-        }
-      }
-    }
+    // Clear cache when bill is generated
+    cache.clear('dailyStats');
+    cache.clear('openOrders');
+    
+    return res.json(order);
   } catch (error) {
     res.status(400).json({ message: error.message });
   }
 };
 
-// Settle Bill (Payment)
+// Settle Bill (Payment) - Saves bill to history (status: 'Paid')
 const settleBill = async (req, res) => {
   try {
     const { id } = req.params;
@@ -141,22 +118,82 @@ const settleBill = async (req, res) => {
     const order = await Bill.findById(id);
     if (!order) return res.status(404).json({ message: 'Order not found' });
     
+    // Set status to 'Paid' - this makes it appear in billing history
     order.status = 'Paid';
     order.paymentMode = paymentMode;
     
+    // Explicitly update the updatedAt timestamp to ensure latest bills show first
+    order.updatedAt = new Date();
+    
+    // Save the bill - it's now in billing history with fresh timestamp
     await order.save();
+    
+    // Clear cache when bill is settled (most important for dashboard)
+    cache.clear('dailyStats');
+    cache.clear('openOrders');
+    
+    // Return the saved bill with all details
     res.json(order);
   } catch (error) {
+    console.error('Error settling bill:', error);
     res.status(400).json({ message: error.message });
   }
 };
 
-// Get all bills (for history)
+// Get all bills (for history) with pagination support - Optimized for 150+ orders/day
 const getBills = async (req, res) => {
   try {
-    const bills = await Bill.find({ status: 'Paid' }).sort({ createdAt: -1 });
-    res.json(bills);
+    const page = parseInt(req.query.page) || 1;
+    const limit = Math.min(parseInt(req.query.limit) || 20, 100); // Default 20 per page, max 100 for performance
+    const skip = (page - 1) * limit;
+    const search = req.query.search || '';
+
+    // Build query with search
+    const query = { status: 'Paid' };
+    if (search) {
+      query.billNumber = { $regex: search, $options: 'i' };
+    }
+
+    // Use lean() for better performance with large datasets
+    // Sort by updatedAt descending (newest first) - Latest paid bills appear first
+    // Using updatedAt ensures bills that were just paid/completed show at the top
+    // This ensures whatever billing was done most recently appears first
+    const bills = await Bill.find(query)
+      .select('billNumber tableNo billType paymentMode total createdAt updatedAt') // Include both timestamps
+      .sort({ updatedAt: -1, createdAt: -1 }) // Sort by updatedAt first (when paid), then createdAt as tiebreaker
+      .skip(skip)
+      .limit(limit)
+      .lean(); // Use lean for faster queries
+    
+    // Use estimatedDocumentCount for better performance on large collections
+    const total = await Bill.countDocuments(query);
+    
+    res.json({
+      bills,
+      pagination: {
+        currentPage: page,
+        totalPages: Math.ceil(total / limit),
+        totalBills: total,
+        hasMore: skip + bills.length < total
+      }
+    });
   } catch (error) {
+    console.error('Error fetching bills:', error);
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// Get a single bill by ID (with all details for invoice)
+const getBillById = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const bill = await Bill.findById(id);
+    if (!bill) {
+      return res.status(404).json({ message: 'Bill not found' });
+    }
+    res.json(bill);
+  } catch (error) {
+    console.error('Error fetching bill by ID:', error);
     res.status(500).json({ message: error.message });
   }
 };
@@ -169,20 +206,129 @@ const deleteBill = async (req, res) => {
     if (!deletedBill) {
       return res.status(404).json({ message: 'Bill not found' });
     }
+    
+    // Clear cache when bill is deleted
+    cache.clear('dailyStats');
+    
     res.json({ message: 'Bill deleted successfully' });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
 };
 
-// Get all open/billed orders
+// Get all open/billed orders (optimized for performance with caching)
 const getOpenOrders = async (req, res) => {
   try {
-    const orders = await Bill.find({ 
-      status: { $in: ['Open', 'Billed'] } 
-    }).sort({ updatedAt: -1 });
+    const cacheKey = cache.getCacheKey('openOrders');
+    const cached = cache.get(cacheKey);
+    if (cached) {
+      return res.json(cached);
+    }
+    
+    const orders = await Bill.find({
+      status: { $in: ['Open', 'Billed'] }
+    })
+    .select('tableNo items total status billNumber billType updatedAt') // Only select needed fields
+    .sort({ updatedAt: -1 })
+    .limit(100) // Limit to 100 most recent active orders
+    .lean(); // Use lean for faster queries
+    
+    // Cache for 10 seconds (active orders change frequently)
+    cache.set(cacheKey, orders, 10000);
+    
     res.json(orders);
   } catch (error) {
+    console.error('Error fetching open orders:', error);
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// Get daily statistics - Optimized with caching for 150+ orders/day
+const getDailyStats = async (req, res) => {
+  try {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const cacheKey = cache.getCacheKey('dailyStats', today.toISOString().split('T')[0]);
+    
+    // Check cache first (30 second TTL for real-time feel)
+    const cached = cache.get(cacheKey);
+    if (cached) {
+      return res.json(cached);
+    }
+
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+
+    // Optimized: Single aggregation pipeline for better performance
+    const [paidStats, paymentStats, activeOrders] = await Promise.all([
+      // Get paid bills stats
+      Bill.aggregate([
+        {
+          $match: {
+            createdAt: { $gte: today, $lt: tomorrow },
+            status: 'Paid'
+          }
+        },
+        {
+          $group: {
+            _id: null,
+            totalRevenue: { $sum: '$total' },
+            totalBills: { $sum: 1 },
+            totalDiscount: { $sum: '$discount' },
+            totalTax: { $sum: '$tax' },
+            avgOrderValue: { $avg: '$total' },
+            totalItems: { $sum: { $size: '$items' } }
+          }
+        }
+      ]),
+      // Get payment method breakdown
+      Bill.aggregate([
+        {
+          $match: {
+            createdAt: { $gte: today, $lt: tomorrow },
+            status: 'Paid'
+          }
+        },
+        {
+          $group: {
+            _id: '$paymentMode',
+            count: { $sum: 1 },
+            revenue: { $sum: '$total' }
+          }
+        }
+      ]),
+      // Get active orders count (cached in memory for frequent access)
+      Bill.countDocuments({
+        status: { $in: ['Open', 'Billed'] }
+      })
+    ]);
+
+    const result = paidStats[0] || { 
+      totalRevenue: 0, 
+      totalBills: 0, 
+      totalDiscount: 0, 
+      totalTax: 0,
+      avgOrderValue: 0,
+      totalItems: 0
+    };
+
+    const response = {
+      sales: result.totalRevenue,
+      orders: result.totalBills,
+      averageOrderValue: Math.round(result.avgOrderValue || 0),
+      totalItems: result.totalItems,
+      totalDiscount: result.totalDiscount,
+      totalTax: result.totalTax,
+      paymentMethods: paymentStats,
+      activeOrders: activeOrders
+    };
+    
+    // Cache the result for 30 seconds
+    cache.set(cacheKey, response, 30000);
+    
+    res.json(response);
+  } catch (error) {
+    console.error('Error fetching daily stats:', error);
     res.status(500).json({ message: error.message });
   }
 };
@@ -193,6 +339,8 @@ module.exports = {
   generateBill,
   settleBill,
   getBills,
+  getBillById,
   deleteBill,
-  getOpenOrders
+  getOpenOrders,
+  getDailyStats
 };

@@ -2,7 +2,7 @@ const Menu = require('../models/Menu');
 
 exports.getAllMenuItems = async (req, res) => {
   try {
-    const items = await Menu.find();
+    const items = await Menu.find({ isAvailable: true }).populate('category', 'name');
     res.status(200).json(items);
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -10,11 +10,23 @@ exports.getAllMenuItems = async (req, res) => {
 };
 
 exports.addMenuItem = async (req, res) => {
-  const { name, price, category } = req.body;
   try {
-    const newItem = new Menu({ name, price, category });
+    const Category = require('../models/Category');
+    let categoryData = req.body.category;
+
+    // If category is a string, find the category by name
+    if (typeof categoryData === 'string') {
+      const category = await Category.findOne({ name: categoryData });
+      if (!category) {
+        return res.status(400).json({ message: 'Category not found' });
+      }
+      categoryData = category._id;
+    }
+
+    const newItem = new Menu({ ...req.body, category: categoryData });
     await newItem.save();
-    res.status(201).json(newItem);
+    const populatedItem = await Menu.findById(newItem._id).populate('category', 'name');
+    res.status(201).json(populatedItem);
   } catch (error) {
     res.status(400).json({ message: error.message });
   }
@@ -22,7 +34,22 @@ exports.addMenuItem = async (req, res) => {
 
 exports.updateMenuItem = async (req, res) => {
   try {
-    const updatedItem = await Menu.findByIdAndUpdate(req.params.id, req.body, { new: true });
+    const Category = require('../models/Category');
+    let updateData = req.body;
+
+    // If category is a string, find the category by name
+    if (typeof updateData.category === 'string') {
+      const category = await Category.findOne({ name: updateData.category });
+      if (!category) {
+        return res.status(400).json({ message: 'Category not found' });
+      }
+      updateData.category = category._id;
+    }
+
+    const updatedItem = await Menu.findByIdAndUpdate(req.params.id, updateData, { new: true }).populate('category', 'name');
+    if (!updatedItem) {
+      return res.status(404).json({ message: 'Menu item not found' });
+    }
     res.status(200).json(updatedItem);
   } catch (error) {
     res.status(400).json({ message: error.message });
@@ -31,7 +58,10 @@ exports.updateMenuItem = async (req, res) => {
 
 exports.deleteMenuItem = async (req, res) => {
   try {
-    await Menu.findByIdAndDelete(req.params.id);
+    const deletedItem = await Menu.findByIdAndDelete(req.params.id);
+    if (!deletedItem) {
+      return res.status(404).json({ message: 'Menu item not found' });
+    }
     res.status(200).json({ message: 'Item deleted successfully' });
   } catch (error) {
     res.status(400).json({ message: error.message });
