@@ -16,6 +16,15 @@ const corsOptions = {
 app.use(cors(corsOptions));
 app.use(express.json());
 
+// Health check route
+app.get('/', (req, res) => {
+  res.status(200).json({
+    status: 'OK',
+    message: 'Your restaurant billing backend is running perfect!..!',
+    timestamp: new Date().toISOString()
+  });
+});
+
 // Routes
 import menuRoutes from './routes/menuRoutes.js';
 import billRoutes from './routes/billRoutes.js';
