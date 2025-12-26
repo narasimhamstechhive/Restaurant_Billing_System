@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { getMenuItems, addMenuItem, updateMenuItem, deleteMenuItem } from '../api/menu';
 import { getAllCategories, createCategory, updateCategory, deleteCategory } from '../api/category';
-import { Plus, Edit2, Trash2, X, Search, FolderPlus, Folder, FolderOpen, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Plus, Edit2, Trash2, X, Search, FolderPlus, Folder, FolderOpen, ChevronLeft, ChevronRight, Eye } from 'lucide-react';
 import ConfirmationModal from './ConfirmationModal';
 import Toast from './Toast';
 
-const MenuManagement = () => {
+const MenuManagement = ({ user }) => {
   const [activeTab, setActiveTab] = useState('items');
   const [items, setItems] = useState([]);
   const [categories, setCategories] = useState([]);
@@ -14,6 +14,8 @@ const MenuManagement = () => {
   const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
   const [currentItem, setCurrentItem] = useState(null);
   const [currentCategory, setCurrentCategory] = useState(null);
+  const [isViewMode, setIsViewMode] = useState(false);
+  const [isCategoryViewMode, setIsCategoryViewMode] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [deleteModal, setDeleteModal] = useState({ isOpen: false, itemId: null, categoryId: null });
   const [toast, setToast] = useState(null);
@@ -64,7 +66,8 @@ const MenuManagement = () => {
     }
   };
 
-  const handleOpenModal = (item = null) => {
+  const handleOpenModal = (item = null, viewMode = false) => {
+    setIsViewMode(viewMode);
     if (item) {
       setCurrentItem(item);
       setFormData({
@@ -91,7 +94,8 @@ const MenuManagement = () => {
     setIsModalOpen(true);
   };
 
-  const handleOpenCategoryModal = (category = null) => {
+  const handleOpenCategoryModal = (category = null, viewMode = false) => {
+    setIsCategoryViewMode(viewMode);
     if (category) {
       setCurrentCategory(category);
       setCategoryFormData({
@@ -286,7 +290,7 @@ const MenuManagement = () => {
           >
             Menu Items
           </button>
-          {activeTab === 'items' && (
+          {user?.role === 'Admin' && activeTab === 'items' && (
             <button
               onClick={() => handleOpenModal()}
               className="flex items-center gap-2 bg-primary text-white px-4 py-2 rounded-lg hover:bg-primary-hover transition-colors shadow-lg shadow-primary/20"
@@ -295,7 +299,7 @@ const MenuManagement = () => {
               <span>Add Item</span>
             </button>
           )}
-          {activeTab === 'categories' && (
+          {user?.role === 'Admin' && activeTab === 'categories' && (
             <button
               onClick={() => handleOpenCategoryModal()}
               className="flex items-center gap-2 bg-secondary text-white px-4 py-2 rounded-lg hover:bg-accent transition-colors shadow-lg shadow-secondary/20"
@@ -351,21 +355,32 @@ const MenuManagement = () => {
                     </td>
                     <td className="p-4 font-bold text-text-main">₹{item.price}</td>
                     <td className="p-4 text-right">
-                      <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <div className="flex justify-end gap-2">
                         <button
-                          onClick={() => handleOpenModal(item)}
+                          onClick={() => handleOpenModal(item, true)}
                           className="p-2 hover:bg-background rounded-lg text-primary transition-colors"
-                          title="Edit"
+                          title="View Details"
                         >
-                          <Edit2 size={18} />
+                          <Eye size={18} />
                         </button>
-                        <button
-                          onClick={() => handleDeleteClick(item._id)}
-                          className="p-2 hover:bg-background rounded-lg text-danger transition-colors"
-                          title="Delete"
-                        >
-                          <Trash2 size={18} />
-                        </button>
+                        {user?.role === 'Admin' && (
+                          <>
+                            <button
+                              onClick={() => handleOpenModal(item, false)}
+                              className="p-2 hover:bg-background rounded-lg text-primary transition-colors"
+                              title="Edit Item"
+                            >
+                              <Edit2 size={18} />
+                            </button>
+                            <button
+                              onClick={() => handleDeleteClick(item._id)}
+                              className="p-2 hover:bg-background rounded-lg text-danger transition-colors"
+                              title="Delete Item"
+                            >
+                              <Trash2 size={18} />
+                            </button>
+                          </>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -397,21 +412,32 @@ const MenuManagement = () => {
                       </span>
                     </td>
                     <td className="p-4 text-right">
-                      <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <div className="flex justify-end gap-2">
                         <button
-                          onClick={() => handleOpenCategoryModal(category)}
+                          onClick={() => handleOpenCategoryModal(category, true)}
                           className="p-2 hover:bg-background rounded-lg text-primary transition-colors"
-                          title="Edit"
+                          title="View Details"
                         >
-                          <Edit2 size={18} />
+                          <Eye size={18} />
                         </button>
-                        <button
-                          onClick={() => handleDeleteCategoryClick(category._id)}
-                          className="p-2 hover:bg-background rounded-lg text-danger transition-colors"
-                          title="Delete"
-                        >
-                          <Trash2 size={18} />
-                        </button>
+                        {user?.role === 'Admin' && (
+                          <>
+                            <button
+                              onClick={() => handleOpenCategoryModal(category, false)}
+                              className="p-2 hover:bg-background rounded-lg text-primary transition-colors"
+                              title="Edit Category"
+                            >
+                              <Edit2 size={18} />
+                            </button>
+                            <button
+                              onClick={() => handleDeleteCategoryClick(category._id)}
+                              className="p-2 hover:bg-background rounded-lg text-danger transition-colors"
+                              title="Delete Category"
+                            >
+                              <Trash2 size={18} />
+                            </button>
+                          </>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -487,7 +513,7 @@ const MenuManagement = () => {
           <div className="bg-surface w-full max-w-md rounded-2xl shadow-2xl border border-border flex flex-col max-h-[90vh]">
             <div className="flex justify-between items-center p-6 border-b border-border">
               <h2 className="text-xl font-bold text-text-main">
-                {currentItem ? 'Edit Item' : 'Add New Item'}
+                {isViewMode ? 'View Item' : currentItem ? 'Edit Item' : 'Add New Item'}
               </h2>
               <button 
                 onClick={() => setIsModalOpen(false)}
@@ -604,14 +630,16 @@ const MenuManagement = () => {
                 />
               </div>
 
-              <div className="pt-4">
-                <button 
-                  type="submit"
-                  className="w-full bg-primary text-white py-3 rounded-xl font-bold hover:bg-primary-hover transition-colors shadow-lg shadow-primary/20"
-                >
-                  {currentItem ? 'Update Item' : 'Create Item'}
-                </button>
-              </div>
+              {!isViewMode && (
+                <div className="pt-4">
+                  <button
+                    type="submit"
+                    className="w-full bg-primary text-white py-3 rounded-xl font-bold hover:bg-primary-hover transition-colors shadow-lg shadow-primary/20"
+                  >
+                    {currentItem ? 'Update Item' : 'Create Item'}
+                  </button>
+                </div>
+              )}
             </form>
           </div>
         </div>
@@ -623,7 +651,7 @@ const MenuManagement = () => {
           <div className="bg-surface w-full max-w-md rounded-2xl shadow-2xl border border-border flex flex-col max-h-[90vh]">
             <div className="flex justify-between items-center p-6 border-b border-border">
               <h2 className="text-xl font-bold text-text-main">
-                {currentCategory ? 'Edit Category' : 'Add New Category'}
+                {isCategoryViewMode ? 'View Category' : currentCategory ? 'Edit Category' : 'Add New Category'}
               </h2>
               <button
                 onClick={() => setIsCategoryModalOpen(false)}
@@ -675,14 +703,16 @@ const MenuManagement = () => {
                 />
               </div>
 
-              <div className="pt-4">
-                <button
-                  type="submit"
-                  className="w-full bg-secondary text-white py-3 rounded-xl font-bold hover:bg-accent transition-colors shadow-lg shadow-secondary/20"
-                >
-                  {currentCategory ? 'Update Category' : 'Create Category'}
-                </button>
-              </div>
+              {!isCategoryViewMode && (
+                <div className="pt-4">
+                  <button
+                    type="submit"
+                    className="w-full bg-secondary text-white py-3 rounded-xl font-bold hover:bg-accent transition-colors shadow-lg shadow-secondary/20"
+                  >
+                    {currentCategory ? 'Update Category' : 'Create Category'}
+                  </button>
+                </div>
+              )}
             </form>
           </div>
         </div>

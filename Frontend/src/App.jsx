@@ -8,6 +8,7 @@ import Analytics from './components/Analytics';
 import Dashboard from './components/Dashboard';
 import { LogOut, LayoutDashboard, History, User, UtensilsCrossed, ClipboardList, BarChart3, Home } from 'lucide-react';
 import { getOpenOrders } from './api/billing';
+import { logoutUser } from './api/auth';
 import './App.css';
 
 function App() {
@@ -47,10 +48,19 @@ function App() {
     localStorage.setItem('user', JSON.stringify(data.user));
   };
 
-  const handleLogout = () => {
-    setUser(null);
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
+  const handleLogout = async () => {
+    try {
+      // Call logout API to invalidate session on server
+      await logoutUser();
+    } catch (error) {
+      // Even if logout API fails, clear local state
+      console.error('Logout error:', error);
+    } finally {
+      // Clear local state regardless of API call result
+      setUser(null);
+      localStorage.removeItem('token');
+      localStorage.removeItem('user');
+    }
   };
 
   const handleViewChange = (newView) => {
@@ -134,15 +144,13 @@ function App() {
             <span>Analytics</span>
           </button>
           
-          {user.role === 'Admin' && (
-            <button 
-              onClick={() => handleViewChange('menu')}
-              className={`w-full flex items-center gap-3 px-4 py-3.5 rounded-2xl transition-all font-medium ${view === 'menu' ? 'bg-primary text-white shadow-lg shadow-primary/25 translate-x-2' : 'text-text-muted hover:bg-surface-hover hover:text-text-main hover:translate-x-1'}`}
-            >
-              <UtensilsCrossed size={20} />
-              <span>Menu</span>
-            </button>
-          )}
+          <button
+            onClick={() => handleViewChange('menu')}
+            className={`w-full flex items-center gap-3 px-4 py-3.5 rounded-2xl transition-all font-medium ${view === 'menu' ? 'bg-primary text-white shadow-lg shadow-primary/25 translate-x-2' : 'text-text-muted hover:bg-surface-hover hover:text-text-main hover:translate-x-1'}`}
+          >
+            <UtensilsCrossed size={20} />
+            <span>Menu</span>
+          </button>
         </nav>
 
         <div className="p-6">
@@ -205,7 +213,7 @@ function App() {
               {view === 'billing' && <BillingPage initialTable={selectedTable} onOrderUpdate={fetchActiveOrdersCount} />}
               {view === 'history' && <BillHistory />}
               {view === 'analytics' && <Analytics />}
-              {view === 'menu' && <MenuManagement />}
+              {view === 'menu' && <MenuManagement user={user} />}
             </>
           )}
         </main>
