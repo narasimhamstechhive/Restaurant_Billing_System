@@ -25,19 +25,6 @@ app.get('/', (req, res) => {
   });
 });
 
-// Routes
-import menuRoutes from './routes/menuRoutes.js';
-import billRoutes from './routes/billRoutes.js';
-import authRoutes from './routes/authRoutes.js';
-import categoryRoutes from './routes/categoryRoutes.js';
-import analyticsRoutes from './routes/analyticsRoutes.js';
-
-app.use('/api/menu', menuRoutes);
-app.use('/api/bills', billRoutes);
-app.use('/api/auth', authRoutes);
-app.use('/api/categories', categoryRoutes);
-app.use('/api/analytics', analyticsRoutes);
-
 // Database Connection
 const MONGO_URI = process.env.MONGO_URI || 'mongodb://localhost:27017/restaurant_billing';
 
@@ -93,8 +80,21 @@ const ensureDBConnection = async (req, res, next) => {
   }
 };
 
-// Apply middleware to all API routes
+// Apply middleware to all API routes BEFORE routes are registered
 app.use('/api', ensureDBConnection);
+
+// Routes
+import menuRoutes from './routes/menuRoutes.js';
+import billRoutes from './routes/billRoutes.js';
+import authRoutes from './routes/authRoutes.js';
+import categoryRoutes from './routes/categoryRoutes.js';
+import analyticsRoutes from './routes/analyticsRoutes.js';
+
+app.use('/api/menu', menuRoutes);
+app.use('/api/bills', billRoutes);
+app.use('/api/auth', authRoutes);
+app.use('/api/categories', categoryRoutes);
+app.use('/api/analytics', analyticsRoutes);
 
 // Initialize connection for serverless (non-blocking)
 // Connection will be established on first request via middleware
