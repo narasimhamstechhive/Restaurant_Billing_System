@@ -7,9 +7,6 @@ describe('Analytics Controller Unit Tests', () => {
     await Bill.deleteMany({});
   });
 
-  afterAll(async () => {
-    await mongoose.connection.close();
-  });
 
   describe('getAnalytics', () => {
     it('should return analytics for current month', async () => {

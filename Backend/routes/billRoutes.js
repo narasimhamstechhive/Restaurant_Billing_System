@@ -1,7 +1,7 @@
-const express = require('express');
+import express from 'express';
 const router = express.Router();
-const billController = require('../controllers/billController');
-const { authenticateToken, requireAdmin } = require('../middleware/auth');
+import billController from '../controllers/billController.js';
+import { authenticateToken, requireAdmin } from '../middleware/auth.js';
 
 // GET routes - authenticated users only
 // Order matters: specific routes before parameterized routes
@@ -19,4 +19,4 @@ router.post('/settle/:id', authenticateToken, billController.settleBill);
 // DELETE - Admin only
 router.delete('/:id', authenticateToken, requireAdmin, billController.deleteBill);
 
-module.exports = router;
+export default router;

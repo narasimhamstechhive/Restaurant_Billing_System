@@ -1,14 +1,14 @@
-const express = require('express');
+import express from 'express';
 const router = express.Router();
-const menuController = require('../controllers/menuController');
-const { authenticateToken, requireAdmin } = require('../middleware/auth');
+import { getAllMenuItems, addMenuItem, updateMenuItem, deleteMenuItem } from '../controllers/menuController.js';
+import { authenticateToken, requireAdmin } from '../middleware/auth.js';
 
 // GET menu items - public (for billing page)
-router.get('/', menuController.getAllMenuItems);
+router.get('/', getAllMenuItems);
 
 // POST, PUT, DELETE - Admin only
-router.post('/', authenticateToken, requireAdmin, menuController.addMenuItem);
-router.put('/:id', authenticateToken, requireAdmin, menuController.updateMenuItem);
-router.delete('/:id', authenticateToken, requireAdmin, menuController.deleteMenuItem);
+router.post('/', authenticateToken, requireAdmin, addMenuItem);
+router.put('/:id', authenticateToken, requireAdmin, updateMenuItem);
+router.delete('/:id', authenticateToken, requireAdmin, deleteMenuItem);
 
-module.exports = router;
+export default router;

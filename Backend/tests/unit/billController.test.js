@@ -15,6 +15,7 @@ app.get('/bills/:id', billController.getBillById);
 app.post('/bills/generate/:id', billController.generateBill);
 app.post('/bills/settle/:id', billController.settleBill);
 app.delete('/bills/:id', billController.deleteBill);
+app.get('/bills/active/:tableNo', billController.getActiveOrder);
 
 describe('Bill Controller Unit Tests', () => {
   let authToken;
@@ -58,7 +59,6 @@ describe('Bill Controller Unit Tests', () => {
 
   afterAll(async () => {
     await User.deleteMany({});
-    await mongoose.connection.close();
   });
 
   describe('POST /bills/save', () => {
@@ -208,9 +208,28 @@ describe('Bill Controller Unit Tests', () => {
         .delete(`/bills/${paidBill._id}`);
 
       expect(response.status).toBe(200);
-      
+
       const deletedBill = await Bill.findById(paidBill._id);
       expect(deletedBill).toBeNull();
+    });
+  });
+
+  describe('GET /bills/active/:tableNo', () => {
+    it('should get active order for a table', async () => {
+      const response = await request(app)
+        .get('/bills/active/T1');
+
+      expect(response.status).toBe(200);
+      expect(response.body.tableNo).toBe('T1');
+      expect(response.body.status).toBe('Open');
+    });
+
+    it('should return null for table with no active order', async () => {
+      const response = await request(app)
+        .get('/bills/active/T99');
+
+      expect(response.status).toBe(200);
+      expect(response.body).toBeNull();
     });
   });
 });

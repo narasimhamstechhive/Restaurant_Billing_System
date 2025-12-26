@@ -37,7 +37,6 @@ describe('Billing Flow Integration Tests', () => {
 
   afterAll(async () => {
     await User.deleteMany({});
-    await mongoose.connection.close();
   });
 
   it('should complete full billing flow: Create -> Generate -> Settle', async () => {

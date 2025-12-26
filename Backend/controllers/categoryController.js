@@ -1,6 +1,6 @@
-const Category = require('../models/Category');
+import Category from '../models/Category.js';
 
-exports.getAllCategories = async (req, res) => {
+export const getAllCategories = async (req, res) => {
   try {
     const categories = await Category.find({ isActive: true }).sort({ sortOrder: 1, name: 1 });
     res.status(200).json(categories);
@@ -9,7 +9,7 @@ exports.getAllCategories = async (req, res) => {
   }
 };
 
-exports.getAllCategoriesAdmin = async (req, res) => {
+export const getAllCategoriesAdmin = async (req, res) => {
   try {
     const categories = await Category.find().sort({ sortOrder: 1, name: 1 });
     res.status(200).json(categories);
@@ -18,7 +18,7 @@ exports.getAllCategoriesAdmin = async (req, res) => {
   }
 };
 
-exports.createCategory = async (req, res) => {
+export const createCategory = async (req, res) => {
   try {
     const category = new Category(req.body);
     await category.save();
@@ -28,7 +28,7 @@ exports.createCategory = async (req, res) => {
   }
 };
 
-exports.updateCategory = async (req, res) => {
+export const updateCategory = async (req, res) => {
   try {
     const category = await Category.findByIdAndUpdate(req.params.id, req.body, { new: true });
     if (!category) {
@@ -40,7 +40,7 @@ exports.updateCategory = async (req, res) => {
   }
 };
 
-exports.deleteCategory = async (req, res) => {
+export const deleteCategory = async (req, res) => {
   try {
     const category = await Category.findByIdAndDelete(req.params.id);
     if (!category) {

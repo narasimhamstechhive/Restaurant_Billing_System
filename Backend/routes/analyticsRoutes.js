@@ -1,10 +1,10 @@
-const express = require('express');
+import express from 'express';
 const router = express.Router();
-const analyticsController = require('../controllers/analyticsController');
-const { authenticateToken } = require('../middleware/auth');
+import analyticsController from '../controllers/analyticsController.js';
+import { authenticateToken } from '../middleware/auth.js';
 
 // GET analytics - authenticated users only
 router.get('/', authenticateToken, analyticsController.getAnalytics);
 
-module.exports = router;
+export default router;
 

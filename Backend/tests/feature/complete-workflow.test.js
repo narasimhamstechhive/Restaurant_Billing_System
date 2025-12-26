@@ -40,7 +40,6 @@ describe('Complete Feature Workflow Tests', () => {
 
   afterAll(async () => {
     await User.deleteMany({});
-    await mongoose.connection.close();
   });
 
   describe('Daily Operations Workflow', () => {

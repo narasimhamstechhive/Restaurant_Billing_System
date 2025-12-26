@@ -1,6 +1,6 @@
-const Menu = require('../models/Menu');
+import Menu from '../models/Menu.js';
 
-exports.getAllMenuItems = async (req, res) => {
+export const getAllMenuItems = async (req, res) => {
   try {
     const items = await Menu.find({ isAvailable: true }).populate('category', 'name');
     res.status(200).json(items);
@@ -9,9 +9,9 @@ exports.getAllMenuItems = async (req, res) => {
   }
 };
 
-exports.addMenuItem = async (req, res) => {
+export const addMenuItem = async (req, res) => {
   try {
-    const Category = require('../models/Category');
+    const Category = (await import('../models/Category.js')).default;
     let categoryData = req.body.category;
 
     // If category is a string, find the category by name
@@ -32,9 +32,9 @@ exports.addMenuItem = async (req, res) => {
   }
 };
 
-exports.updateMenuItem = async (req, res) => {
+export const updateMenuItem = async (req, res) => {
   try {
-    const Category = require('../models/Category');
+    const Category = (await import('../models/Category.js')).default;
     let updateData = req.body;
 
     // If category is a string, find the category by name
@@ -56,7 +56,7 @@ exports.updateMenuItem = async (req, res) => {
   }
 };
 
-exports.deleteMenuItem = async (req, res) => {
+export const deleteMenuItem = async (req, res) => {
   try {
     const deletedItem = await Menu.findByIdAndDelete(req.params.id);
     if (!deletedItem) {
