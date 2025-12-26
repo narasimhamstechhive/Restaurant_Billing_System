@@ -41,36 +41,80 @@ app.use('/api/analytics', analyticsRoutes);
 // Database Connection
 const MONGO_URI = process.env.MONGO_URI || 'mongodb://localhost:27017/restaurant_billing';
 
-// Optimize for serverless - reuse connection
-let cachedConnection = null;
+// Connection state
+let isConnected = false;
+let connectionPromise = null;
 
 const connectDB = async () => {
-  if (cachedConnection && mongoose.connection.readyState === 1) {
-    return cachedConnection;
+  // If already connected, return
+  if (mongoose.connection.readyState === 1) {
+    isConnected = true;
+    return mongoose.connection;
   }
 
-  try {
-    const connection = await mongoose.connect(MONGO_URI, {
-      serverSelectionTimeoutMS: 5000,
-      socketTimeoutMS: 45000,
-    });
-    cachedConnection = connection;
+  // If connection is in progress, return the existing promise
+  if (connectionPromise) {
+    return connectionPromise;
+  }
+
+  // Start new connection
+  connectionPromise = mongoose.connect(MONGO_URI, {
+    serverSelectionTimeoutMS: 30000, // Increased for serverless
+    socketTimeoutMS: 45000,
+    maxPoolSize: 10,
+    minPoolSize: 1,
+  }).then((connection) => {
+    isConnected = true;
     console.log('Connected to MongoDB');
     return connection;
-  } catch (error) {
+  }).catch((error) => {
     console.error('MongoDB connection error:', error);
+    connectionPromise = null; // Reset on error to allow retry
+    isConnected = false;
     throw error;
+  });
+
+  return connectionPromise;
+};
+
+// Middleware to ensure DB connection before handling requests (for serverless)
+const ensureDBConnection = async (req, res, next) => {
+  try {
+    if (mongoose.connection.readyState !== 1) {
+      await connectDB();
+    }
+    next();
+  } catch (error) {
+    console.error('Database connection error:', error);
+    res.status(500).json({ 
+      message: 'Database connection failed',
+      error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
+    });
   }
 };
 
-// Connect to database
-connectDB().catch(console.error);
+// Apply middleware to all API routes
+app.use('/api', ensureDBConnection);
+
+// Initialize connection for serverless (non-blocking)
+// Connection will be established on first request via middleware
+if (process.env.VERCEL === '1' || process.env.VERCEL_ENV) {
+  // In serverless, connect on module load but don't block
+  connectDB().catch((err) => {
+    console.error('Initial connection attempt failed (will retry on request):', err.message);
+  });
+}
 
 // Only start server if not in serverless environment (local development)
-if (process.env.VERCEL !== '1') {
+if (!process.env.VERCEL && !process.env.VERCEL_ENV) {
   const PORT = process.env.PORT || 5000;
-  app.listen(PORT, () => {
-    console.log(`Server running on port ${PORT}`);
+  connectDB().then(() => {
+    app.listen(PORT, () => {
+      console.log(`Server running on port ${PORT}`);
+    });
+  }).catch((err) => {
+    console.error('Failed to start server:', err);
+    process.exit(1);
   });
 }
 
