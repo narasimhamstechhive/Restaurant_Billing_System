@@ -52,7 +52,7 @@ setInterval(() => {
   }
 }, 5 * 60 * 1000);
 
-module.exports = {
+export default {
   get,
   set,
   clear,

@@ -1,8 +1,8 @@
-const Bill = require('../models/Bill');
-const cache = require('../utils/cache');
+import Bill from '../models/Bill.js';
+import cache from '../utils/cache.js';
 
 // Get active order for a table
-const getActiveOrder = async (req, res) => {
+export const getActiveOrder = async (req, res) => {
   try {
     const { tableNo } = req.params;
     const order = await Bill.findOne({ 
@@ -16,10 +16,18 @@ const getActiveOrder = async (req, res) => {
 };
 
 // Create or Update Order (Open Status)
-const saveOrder = async (req, res) => {
+export const saveOrder = async (req, res) => {
   try {
     const { tableNo, items, customerName, customerPhone, kitchenNotes, billType } = req.body;
 
+    // Validate required fields
+    if (!tableNo) {
+      return res.status(400).json({ message: 'Table number is required' });
+    }
+    
+    if (!items || !Array.isArray(items) || items.length === 0) {
+      return res.status(400).json({ message: 'Items array is required and must not be empty' });
+    }
 
     // Sanitize items and calculate item totals
     const sanitizedItems = items.map(item => ({
@@ -75,7 +83,7 @@ const saveOrder = async (req, res) => {
 };
 
 // Generate Bill (Lock Order)
-const generateBill = async (req, res) => {
+export const generateBill = async (req, res) => {
   try {
     const { id } = req.params;
     const { discount, tax } = req.body;
@@ -110,7 +118,7 @@ const generateBill = async (req, res) => {
 };
 
 // Settle Bill (Payment) - Saves bill to history (status: 'Paid')
-const settleBill = async (req, res) => {
+export const settleBill = async (req, res) => {
   try {
     const { id } = req.params;
     const { paymentMode } = req.body;
@@ -141,7 +149,7 @@ const settleBill = async (req, res) => {
 };
 
 // Get all bills (for history) with pagination support - Optimized for 150+ orders/day
-const getBills = async (req, res) => {
+export const getBills = async (req, res) => {
   try {
     const page = parseInt(req.query.page) || 1;
     const limit = Math.min(parseInt(req.query.limit) || 20, 100); // Default 20 per page, max 100 for performance
@@ -184,7 +192,7 @@ const getBills = async (req, res) => {
 };
 
 // Get a single bill by ID (with all details for invoice)
-const getBillById = async (req, res) => {
+export const getBillById = async (req, res) => {
   try {
     const { id } = req.params;
     const bill = await Bill.findById(id);
@@ -199,7 +207,7 @@ const getBillById = async (req, res) => {
 };
 
 // Delete a bill
-const deleteBill = async (req, res) => {
+export const deleteBill = async (req, res) => {
   try {
     const { id } = req.params;
     const deletedBill = await Bill.findByIdAndDelete(id);
@@ -217,7 +225,7 @@ const deleteBill = async (req, res) => {
 };
 
 // Get all open/billed orders (optimized for performance with caching)
-const getOpenOrders = async (req, res) => {
+export const getOpenOrders = async (req, res) => {
   try {
     const cacheKey = cache.getCacheKey('openOrders');
     const cached = cache.get(cacheKey);
@@ -244,7 +252,7 @@ const getOpenOrders = async (req, res) => {
 };
 
 // Get daily statistics - Optimized with caching for 150+ orders/day
-const getDailyStats = async (req, res) => {
+export const getDailyStats = async (req, res) => {
   try {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -333,14 +341,3 @@ const getDailyStats = async (req, res) => {
   }
 };
 
-module.exports = {
-  getActiveOrder,
-  saveOrder,
-  generateBill,
-  settleBill,
-  getBills,
-  getBillById,
-  deleteBill,
-  getOpenOrders,
-  getDailyStats
-};

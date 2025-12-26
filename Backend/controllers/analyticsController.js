@@ -1,7 +1,7 @@
-const Bill = require('../models/Bill');
+import Bill from '../models/Bill.js';
 
 // Get comprehensive analytics
-const getAnalytics = async (req, res) => {
+export const getAnalytics = async (req, res) => {
   try {
     const { month, year, days } = req.query;
     
@@ -168,7 +168,4 @@ const getAnalytics = async (req, res) => {
   }
 };
 
-module.exports = {
-  getAnalytics
-};
 

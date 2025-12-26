@@ -9,11 +9,8 @@ const app = express();
 
 // Middleware
 // CORS configuration - allow all origins (can be restricted in production)
-const corsOptions = {
-  origin: process.env.CORS_ORIGIN ? process.env.CORS_ORIGIN.split(',') : '*',
-  credentials: true
-};
-app.use(cors(corsOptions));
+
+app.use(cors({ origin: ['http://localhost:5173','http://localhost:5174','https://restaurant-billing-system-frontend-ruddy.vercel.app'] }));
 app.use(express.json());
 
 // Health check route
