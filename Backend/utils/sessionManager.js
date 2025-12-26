@@ -112,5 +112,5 @@ class SessionManager {
 }
 
 // Export singleton instance
-module.exports = new SessionManager();
+export default new SessionManager();
 

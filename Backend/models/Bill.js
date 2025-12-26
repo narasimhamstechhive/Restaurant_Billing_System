@@ -1,4 +1,4 @@
-const mongoose = require('mongoose');
+import mongoose from 'mongoose';
 
 const billSchema = new mongoose.Schema({
   billNumber: {
@@ -60,4 +60,4 @@ billSchema.index({ createdAt: -1, status: 1 }); // For analytics queries
 billSchema.index({ paymentMode: 1, createdAt: -1 }); // For payment method analytics
 billSchema.index({ billType: 1, createdAt: -1 }); // For bill type filtering
 
-module.exports = mongoose.model('Bill', billSchema);
+export default mongoose.model('Bill', billSchema);
