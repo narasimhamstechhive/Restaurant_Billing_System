@@ -8,9 +8,42 @@ dotenv.config();
 const app = express();
 
 // Middleware
-// CORS configuration - allow all origins (can be restricted in production)
+// CORS configuration
+const allowedOrigins = [
+  'http://localhost:5173',
+  'http://localhost:5174',
+  'https://restaurant-billing-system-frontend-ten.vercel.app',
+  'https://restaurant-billing-system-frontend-ruddy.vercel.app',
+  // Allow from environment variable (comma-separated)
+  ...(process.env.CORS_ORIGIN && process.env.CORS_ORIGIN !== '*' 
+    ? process.env.CORS_ORIGIN.split(',').map(origin => origin.trim()) 
+    : [])
+];
 
-app.use(cors({ origin: ['http://localhost:5173','http://localhost:5174','https://restaurant-billing-system-frontend-ruddy.vercel.app'] }));
+const corsOptions = {
+  origin: function (origin, callback) {
+    // Allow requests with no origin (like mobile apps or curl requests)
+    if (!origin) return callback(null, true);
+    
+    // If CORS_ORIGIN is '*', allow all origins
+    if (process.env.CORS_ORIGIN === '*') {
+      return callback(null, true);
+    }
+    
+    // Check if origin is in allowed list
+    if (allowedOrigins.indexOf(origin) !== -1) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  exposedHeaders: ['Content-Type', 'Authorization']
+};
+
+app.use(cors(corsOptions));
 app.use(express.json());
 
 // Health check route
